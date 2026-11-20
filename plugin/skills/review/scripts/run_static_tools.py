@@ -63,7 +63,8 @@ TOOLS = {
         "install": {
             "macos": ["brew install cppcheck"],
             "linux": ["sudo apt-get install -y cppcheck", "sudo dnf install -y cppcheck"],
-            "windows": ["winget install --id Cppcheck.Cppcheck -e", "choco install cppcheck -y"],
+            "windows": ["winget install --id Cppcheck.Cppcheck -e --accept-source-agreements --accept-package-agreements",
+                        "choco install cppcheck -y"],
         },
         "size": "small (~20 MB)",
     },
@@ -78,7 +79,8 @@ TOOLS = {
         "install": {
             "macos": ["brew install llvm"],
             "linux": ["sudo apt-get install -y clang-tidy", "sudo dnf install -y clang-tools-extra"],
-            "windows": ["winget install --id LLVM.LLVM -e", "choco install llvm -y"],
+            "windows": ["winget install --id LLVM.LLVM -e --accept-source-agreements --accept-package-agreements",
+                        "choco install llvm -y"],
         },
         "size": "large (~1-2 GB with LLVM)",
     },
@@ -101,28 +103,121 @@ TOOLS = {
         "install": {
             "macos": ["brew install semgrep", "python3 -m pip install --user semgrep"],
             "linux": ["python3 -m pip install --user semgrep"],
-            "windows": ["py -m pip install --user semgrep  (native Windows support is newer; if it fails, use WSL)"],
+            "windows": ["py -m pip install --user semgrep"],
         },
+        "install_note": {"windows": "The command names a Python version semgrep has prebuilt wheels for; plain `py` would use "
+                                    "your newest Python, which may be too new. Native Windows support in semgrep is recent; "
+                                    "if the install or the first run still fails, use WSL."},
         "size": "medium (~200 MB)",
     },
 }
 
 
-def find_tool(name):
+def windows_pip():
+    """`py -3.X` for the newest installed Python the pip-installed tools have prebuilt wheels for, else `py`.
+    Plain `py` runs the newest Python on the machine, which is often newer than semgrep's dependencies support."""
+    if OS != "windows" or not shutil.which("py"):
+        return "py"
+    for v in ("3.13", "3.12", "3.11", "3.10", "3.9"):
+        try:
+            r = subprocess.run(["py", f"-{v}", "-c", "pass"], capture_output=True, timeout=30)
+            if r.returncode == 0:
+                return f"py -{v}"
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+    return "py"
+
+
+def install_commands(t):
+    cmds = t["install"].get(OS, [])
+    if OS == "windows":
+        launcher = windows_pip()
+        cmds = [c.replace("py -m pip", f"{launcher} -m pip") for c in cmds]
+    return cmds
+
+
+def user_script_dirs():
+    """Folders where `pip install --user` puts console scripts; usually not on PATH on Windows and macOS."""
+    import glob
+    import sysconfig
+    home = os.path.expanduser("~")
+    dirs = [os.path.join(home, ".local", "bin")]
+    for scheme in ("nt_user", "osx_framework_user", "posix_user"):
+        try:
+            d = sysconfig.get_path("scripts", scheme)
+        except Exception:  # noqa: BLE001  (schemes differ by version and platform; any failure just means "no such folder")
+            continue
+        if d:
+            dirs.append(d)
+    if OS == "windows":
+        dirs += glob.glob(os.path.join(os.environ.get("APPDATA", ""), "Python", "Python3*", "Scripts"))
+    if OS == "macos":
+        dirs += glob.glob(os.path.join(home, "Library", "Python", "3.*", "bin"))
+    seen, out = set(), []
+    for d in dirs:
+        if d and d not in seen and os.path.isdir(d):
+            seen.add(d)
+            out.append(d)
+    return out
+
+
+def cppcheck_works(path):
+    """Strawberry Perl and some SDKs put a cppcheck on PATH that cannot run a scan (no cfg files); a
+    one-file trial run tells a working install from a stub."""
+    d = tempfile.mkdtemp(prefix="cppcheck-probe-")
+    try:
+        with open(os.path.join(d, "probe.c"), "w", encoding="utf-8") as f:
+            f.write("int main(void) { return 0; }\n")
+        rc, out, err, fail = run([path, "--xml", "--quiet", "--enable=warning", d], 120)
+        return fail is None and rc == 0 and "<results" in err
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+WORKS = {"cppcheck": cppcheck_works}
+_FOUND = {}
+
+
+def tool_candidates(name):
     t = TOOLS[name]
-    for exe in t["exe"]:
-        p = shutil.which(exe)
-        if p:
-            return p
-    for p in t["extra_paths"].get(OS, []):
-        if os.path.isfile(p):
-            return p
-    return None
+    cands = []
+    # every PATH entry, not just the first hit: the first one may be a stub (see cppcheck_works)
+    for d in os.environ.get("PATH", "").split(os.pathsep):
+        for exe in t["exe"]:
+            p = shutil.which(exe, path=d) if d else None
+            if p:
+                cands.append(p)
+    cands += [p for p in t["extra_paths"].get(OS, []) if os.path.isfile(p)]
+    for d in user_script_dirs():
+        for exe in t["exe"]:
+            p = shutil.which(exe, path=d)
+            if p:
+                cands.append(p)
+    seen, out = set(), []
+    for c in cands:
+        k = os.path.normcase(os.path.abspath(c))
+        if k not in seen:
+            seen.add(k)
+            out.append(c)
+    return out
+
+
+def find_tool(name):
+    if name in _FOUND:
+        return _FOUND[name]
+    works = WORKS.get(name)
+    found = None
+    for p in tool_candidates(name):
+        if works is None or works(p):
+            found = p
+            break
+    _FOUND[name] = found
+    return found
 
 
 def tool_version(path):
     try:
-        out = subprocess.run([path, "--version"], capture_output=True, text=True, timeout=60)
+        out = subprocess.run([path, "--version"], capture_output=True, text=True, timeout=60, env=tool_env(path))
         line = (out.stdout or out.stderr).strip().splitlines()
         return line[0][:120] if line else ""
     except Exception as ex:  # noqa: BLE001
@@ -178,10 +273,20 @@ def rel(root, p):
         return p.replace(os.sep, "/")
 
 
+def tool_env(exe):
+    """Environment for running a tool: its own folder goes first on PATH, because wrappers such as
+    semgrep.exe exec a sibling (pysemgrep.exe) by name, and pip --user folders are rarely on PATH."""
+    env = dict(os.environ)
+    d = os.path.dirname(exe) if exe and os.path.isabs(exe) else ""
+    if d:
+        env["PATH"] = d + os.pathsep + env.get("PATH", "")
+    return env
+
+
 def run(cmd, timeout, cwd=None):
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd,
-                           encoding="utf-8", errors="replace")
+                           encoding="utf-8", errors="replace", env=tool_env(cmd[0]))
         return r.returncode, r.stdout, r.stderr, None
     except subprocess.TimeoutExpired:
         return None, "", "", f"timed out after {timeout}s"
@@ -215,7 +320,8 @@ def run_cppcheck(path, root, srcs, incs, args):
     try:
         xroot = ET.fromstring(err[err.find("<?xml"):] if "<?xml" in err else err)
     except ET.ParseError as ex:
-        return [], "failed", f"could not parse cppcheck XML: {ex}; stderr starts: {err[:300]}"
+        detail = " ".join((err or out or "").split())[:300]
+        return [], "failed", f"cppcheck exit {rc}, no usable XML ({ex}); output: {detail or '(none)'}"
     for e in xroot.iter("error"):
         loc = e.find("location")
         if loc is None:
@@ -335,7 +441,8 @@ def check(root):
         tools[name] = {
             "installed": bool(p), "path": p, "version": tool_version(p) if p else None,
             "purpose": t["purpose"], "size": t["size"],
-            "install_commands": t["install"].get(OS, []),
+            "install_commands": install_commands(t),
+            "install_note": t.get("install_note", {}).get(OS),
         }
     db = find_compile_db(root)
     return {

@@ -28,9 +28,10 @@ PSOC6 = os.path.join(SKILLS, "review", "evals", "psoc6-mqtt-sensor-release", "fi
 ACME = os.path.join(SKILLS, "oss", "evals", "acme-hub-multi-product", "files", "acme-hub")
 
 REQUIRED_TOOLS = [t for t in os.environ.get("FW_TEST_REQUIRE_TOOLS", "").split(",") if t.strip()]
+REQUIRE_SCANCODE = os.environ.get("FW_TEST_REQUIRE_SCANCODE") == "1"
 
 
-def run(script, *args, env=None, expect=0, cwd=None):
+def run(script, *args, env=None, expect=0, cwd=None, timeout=600):
     """Run a bundled script with this interpreter and return the CompletedProcess."""
     e = dict(os.environ)
     e.update({"PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"})
@@ -39,7 +40,7 @@ def run(script, *args, env=None, expect=0, cwd=None):
     if env:
         e.update(env)
     cp = subprocess.run([sys.executable, script, *args], capture_output=True, text=True,
-                        encoding="utf-8", errors="replace", env=e, cwd=cwd, timeout=600)
+                        encoding="utf-8", errors="replace", env=e, cwd=cwd, timeout=timeout)
     if expect is not None and cp.returncode != expect:
         raise AssertionError("%s exited %d (expected %d)\nstdout:\n%s\nstderr:\n%s"
                              % (os.path.basename(script), cp.returncode, expect, cp.stdout, cp.stderr))
@@ -144,6 +145,19 @@ class ReviewScripts(TempDirTest):
             self.assertIn("install_commands", d["tools"][tool])
         for tool in REQUIRED_TOOLS:
             self.assertTrue(d["tools"][tool]["installed"], tool + " should be installed on this runner")
+
+    def test_install_advice_is_plain_commands(self):
+        """Every install command the skills print must be runnable as-is; caveats go in install_note."""
+        cp = run(os.path.join(REVIEW, "run_static_tools.py"), PSOC6, "--check")
+        for name, t in json.loads(cp.stdout)["tools"].items():
+            self.assertIn("install_note", t)
+            for cmd in t["install_commands"]:
+                self.assertNotRegex(cmd, r"[()]|\s{2,}", name + ": not a plain command: " + cmd)
+        cp = run(os.path.join(OSS, "license_scan.py"), ACME, "--check")
+        sc = json.loads(cp.stdout)["scancode"]
+        self.assertIn("install_note", sc)
+        for cmd in sc["install_commands"]:
+            self.assertNotRegex(cmd, r"[()]|\s{2,}", "scancode: not a plain command: " + cmd)
 
     def test_static_tools_run(self):
         out = self.path("static")
@@ -283,6 +297,17 @@ class OssScripts(TempDirTest):
         self.assertEqual(sbom["bomFormat"], "CycloneDX")
         names = {c["name"] for c in sbom["components"]}
         self.assertEqual(names, {"zlib", "cmake"})
+
+    @unittest.skipUnless(REQUIRE_SCANCODE, "set FW_TEST_REQUIRE_SCANCODE=1 on a runner where ScanCode is installed")
+    def test_scancode_runs_and_merges(self):
+        out = self.path("lic-sc")
+        cp = run(os.path.join(OSS, "license_scan.py"), ACME, "--out-dir", out, "--run-scancode",
+                 "--scancode-timeout", "1500", timeout=1800)
+        comps = load(os.path.join(out, "components.json"))
+        blob = json.dumps(comps)
+        self.assertIn("ScanCode completed", blob, cp.stderr[-2000:])
+        self.assertIn("(scancode)", blob, "no ScanCode-detected licence expressions were merged")
+        self.assertTrue(os.path.isfile(os.path.join(out, "scancode.json")))
 
     def test_install_scancode_dry_run_installs_nothing(self):
         cp = run(os.path.join(OSS, "install_scancode.py"), "--dry-run")

@@ -8,8 +8,6 @@ The `firmware` Claude Code plugin from ./phazeOne: review embedded / IoT firmwar
 | `firmware:oss` | Scans a codebase for open-source licence risk, works out what ships and how it is linked, and produces a RAG licence report, a draft THIRD_PARTY_NOTICES file and a CycloneDX SBOM. |
 | `firmware:fix` | Works through the findings of a `firmware:review` report one at a time, Red first, with one commit per finding and a status update in the report. |
 
-The HTML report is branded as a ./phazeOne deliverable, styled after <https://www.phazeone.com/>, and carries a **Get in touch** link to <https://www.phazeone.com/contact>. Brand text, URLs, contact details and the body theme live in the `BRAND` dict at the top of `plugin/skills/review/scripts/render_report.py`.
-
 ## Install
 
 From the private marketplace in this repository (Claude Code 2.1.275 or later):

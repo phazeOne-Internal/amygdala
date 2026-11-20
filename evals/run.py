@@ -7,6 +7,7 @@ evals/, runs the eval there, and copies the results back to evals/results/<times
 
     python evals/run.py review            # all amygdala:review cases
     python evals/run.py oss               # all amygdala:oss cases
+    python evals/run.py fix               # all amygdala:fix cases
     python evals/run.py all
     python evals/run.py review -- --case 'ectf*'    # one case (quote the glob for zsh); anything after -- goes to `claude plugin eval`
     python evals/run.py review -- --runs 1           # one run per case instead of three (cheaper, noisier)
@@ -36,9 +37,9 @@ def main():
         i = args.index("--")
         args, extra = args[:i], args[i + 1:]
     which = args[0] if args else "all"
-    if which not in ("review", "oss", "all"):
+    if which not in ("review", "oss", "fix", "all"):
         sys.exit(__doc__)
-    skills = ["review", "oss"] if which == "all" else [which]
+    skills = ["review", "oss", "fix"] if which == "all" else [which]
     claude = shutil.which("claude")
     if not claude:
         sys.exit("claude CLI not found on PATH")

@@ -1,0 +1,6 @@
+#ifndef MBEDTLS_USER_CONFIG_H
+#define MBEDTLS_USER_CONFIG_H
+#define MBEDTLS_ENTROPY_HARDWARE_ALT          /* backed by PSoC 6 TRNG, see trng_port.c */
+#define MBEDTLS_NO_PLATFORM_ENTROPY
+#define MBEDTLS_SSL_MAX_CONTENT_LEN 4096
+#endif

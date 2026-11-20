@@ -63,7 +63,8 @@ TOOLS = {
         "install": {
             "macos": ["brew install cppcheck"],
             "linux": ["sudo apt-get install -y cppcheck", "sudo dnf install -y cppcheck"],
-            "windows": ["winget install --id Cppcheck.Cppcheck -e", "choco install cppcheck -y"],
+            "windows": ["winget install --id Cppcheck.Cppcheck -e --accept-source-agreements --accept-package-agreements",
+                        "choco install cppcheck -y"],
         },
         "size": "small (~20 MB)",
     },
@@ -78,7 +79,8 @@ TOOLS = {
         "install": {
             "macos": ["brew install llvm"],
             "linux": ["sudo apt-get install -y clang-tidy", "sudo dnf install -y clang-tools-extra"],
-            "windows": ["winget install --id LLVM.LLVM -e", "choco install llvm -y"],
+            "windows": ["winget install --id LLVM.LLVM -e --accept-source-agreements --accept-package-agreements",
+                        "choco install llvm -y"],
         },
         "size": "large (~1-2 GB with LLVM)",
     },
@@ -101,11 +103,37 @@ TOOLS = {
         "install": {
             "macos": ["brew install semgrep", "python3 -m pip install --user semgrep"],
             "linux": ["python3 -m pip install --user semgrep"],
-            "windows": ["py -m pip install --user semgrep  (native Windows support is newer; if it fails, use WSL)"],
+            "windows": ["py -m pip install --user semgrep"],
         },
+        "install_note": {"windows": "Native Windows support in semgrep is recent; if the pip install or the first run fails, use WSL."},
         "size": "medium (~200 MB)",
     },
 }
+
+
+def user_script_dirs():
+    """Folders where `pip install --user` puts console scripts; usually not on PATH on Windows and macOS."""
+    import glob
+    import sysconfig
+    home = os.path.expanduser("~")
+    dirs = [os.path.join(home, ".local", "bin")]
+    for scheme in ("nt_user", "osx_framework_user", "posix_user"):
+        try:
+            d = sysconfig.get_path("scripts", scheme)
+        except (KeyError, ValueError):
+            continue
+        if d:
+            dirs.append(d)
+    if OS == "windows":
+        dirs += glob.glob(os.path.join(os.environ.get("APPDATA", ""), "Python", "Python3*", "Scripts"))
+    if OS == "macos":
+        dirs += glob.glob(os.path.join(home, "Library", "Python", "3.*", "bin"))
+    seen, out = set(), []
+    for d in dirs:
+        if d and d not in seen and os.path.isdir(d):
+            seen.add(d)
+            out.append(d)
+    return out
 
 
 def find_tool(name):
@@ -117,6 +145,11 @@ def find_tool(name):
     for p in t["extra_paths"].get(OS, []):
         if os.path.isfile(p):
             return p
+    for d in user_script_dirs():
+        for exe in t["exe"]:
+            p = shutil.which(exe, path=d)
+            if p:
+                return p
     return None
 
 
@@ -336,6 +369,7 @@ def check(root):
             "installed": bool(p), "path": p, "version": tool_version(p) if p else None,
             "purpose": t["purpose"], "size": t["size"],
             "install_commands": t["install"].get(OS, []),
+            "install_note": t.get("install_note", {}).get(OS),
         }
     db = find_compile_db(root)
     return {

@@ -354,11 +354,13 @@ def check():
     install = {
         "macos": ["pipx install scancode-toolkit", "python3 -m pip install --user scancode-toolkit"],
         "linux": ["pipx install scancode-toolkit", "python3 -m pip install --user scancode-toolkit"],
-        "windows": ["py -m pip install --user scancode-toolkit  (or the Windows release archive from github.com/aboutcode-org/scancode-toolkit/releases)"],
+        "windows": ["py -m pip install --user scancode-toolkit"],
     }[OS]
+    note = {"windows": "If pip cannot build it for this Python, use the self-contained Windows release archive from "
+                       "https://github.com/aboutcode-org/scancode-toolkit/releases."}.get(OS)
     return {"os": OS, "scancode": {"installed": bool(p), "path": p, "version": ver,
             "size": "large (several hundred MB with licence data); first run is slow",
-            "install_commands": install,
+            "install_commands": install, "install_note": note,
             "installer": "python <skill-dir>/scripts/install_scancode.py --yes   (only after the user agrees; --dry-run to preview)"},
             "run_hint": "scancode --license --copyright --package --info --strip-root --json-pp <out>/scancode.json "
                         "--ignore '.git/*' -n 4 <repo>  (on big trees add --max-in-memory 0 and expect tens of minutes)"}

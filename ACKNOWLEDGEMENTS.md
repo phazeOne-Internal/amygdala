@@ -42,3 +42,7 @@ Running a tool as a separate process does not make the skills derivative works o
 - [Claude Code](https://claude.com/claude-code) by Anthropic, which runs the skills. The skills follow Anthropic's SKILL.md format.
 
 If we have missed a project you maintain, or stated a licence wrongly, please tell us at hello@phazeone.com and we will correct it.
+
+## Eval fixtures
+
+- [2025-ectf-insecure-example](https://github.com/mitre-cyber-academy/2025-ectf-insecure-example) by The MITRE Corporation, Apache-2.0: the deliberately insecure reference decoder for the 2025 Embedded CTF, used unmodified as a third-party test case for `amygdala:review` under `evals/review/ectf-2025-insecure-example/`.

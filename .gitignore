@@ -14,3 +14,6 @@ firmware-review-workspace/
 
 # NOTE: do not add a bare "firmware-review/" pattern here: it would also match
 # the review skill's default output folder name; the skills themselves live in plugin/skills/.
+
+# Eval run results (regenerable)
+evals/results/

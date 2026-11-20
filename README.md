@@ -32,9 +32,14 @@ For a local checkout, add the folder instead: `/plugin marketplace add /path/to/
 plugin/
   .claude-plugin/plugin.json       plugin manifest (name: amygdala)
   skills/
-    review/                        SKILL.md, references/, scripts/, assets/, evals/
-    oss/                           SKILL.md, references/, scripts/, evals/
+    review/                        SKILL.md, references/, scripts/, assets/
+    oss/                           SKILL.md, references/, scripts/
     fix/                           SKILL.md, scripts/
+evals/
+  review/                          eval cases for amygdala:review (synthetic projects with planted defects, plus the eCTF 2025 insecure example)
+  oss/                             eval cases for amygdala:oss
+  run.py                           runs the cases through claude plugin eval
+tests/                             script test suite and its two sample findings files
 ```
 
 Scripts are plain Python 3 (3.8 or later) with no third-party dependencies and run on macOS, Linux and Windows. They run under whatever `python3` (or `py` on Windows) is on your PATH, including a toolchain's bundled interpreter such as PlatformIO's, ModusToolbox's or ESP-IDF's, and they never install anything into, or modify, the interpreter they run under. The one script that uses the network, the opt-in OSV.dev lookup, verifies TLS through the interpreter's CA bundle, certifi, or the operating system store, whichever is available. Static-analysis tools (cppcheck, clang-tidy, flawfinder, semgrep) are optional; the skill asks before installing anything.
@@ -48,7 +53,7 @@ Scripts are plain Python 3 (3.8 or later) with no third-party dependencies and r
 
 ## Evals
 
-`plugin/skills/review/evals/` and `plugin/skills/oss/evals/` hold the eval cases (synthetic firmware projects with planted defects, plus graders). Run them with `claude plugin eval` or the skill-creator eval runner. Eval fixtures include deliberately committed sample keys and credentials; they are test data, not real secrets.
+`evals/review/` and `evals/oss/` hold the eval cases: synthetic firmware projects with planted defects, one real third-party design (MITRE's eCTF 2025 insecure example decoder, Apache-2.0, see `evals/review/ectf-2025-insecure-example/README.md`), and the graders for each. They live outside `plugin/` so an installed plugin never carries them. Run them with `python evals/run.py review|oss|all`, which assembles a temporary copy of the plugin with the cases inside and calls `claude plugin eval`; each case runs the skill for real and costs tokens. Eval fixtures include deliberately committed sample keys and credentials; they are test data, not real secrets.
 
 ## Testing
 
@@ -63,7 +68,7 @@ GitHub Actions (`.github/workflows/ci.yml`) runs it on every pull request and pu
 - the suite on Ubuntu, Windows and macOS with the oldest supported Python and the current one;
 - on each of the three, a job that installs cppcheck, flawfinder and semgrep using the exact commands `run_static_tools.py --check` prints for that operating system (`tests/install_tools.py`), then requires all three to run on the fixture, so the install advice the skill gives users is tested, not just typed;
 - on each of the three, a job that installs ScanCode Toolkit with `install_scancode.py --yes` (including the libmagic prerequisite on Apple Silicon) and runs a real `--run-scancode` scan;
-- plugin and marketplace validation with `claude plugin validate`. The model-graded evals under `plugin/skills/*/evals/` are not part of CI; run them locally with `claude plugin eval`.
+- plugin and marketplace validation with `claude plugin validate`. The model-graded evals under `evals/` are not part of CI; run them locally with `claude plugin eval`.
 
 ## Security
 

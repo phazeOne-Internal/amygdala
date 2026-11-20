@@ -10,15 +10,15 @@ Email hello@phazeone.com or use https://www.phazeone.com/contact with "skill sec
 
 | Skill | Reads | Writes | Executes | Network |
 |---|---|---|---|---|
-| `firmware:review` | the reviewed repository | the output folder only (default `firmware-review/`) | bundled Python 3 scripts; cppcheck, clang-tidy, flawfinder, semgrep if already installed | none by default. semgrep runs with metrics off. Tool installs happen only after the user says yes, with the exact command shown first. **Optional, opt-in:** the dependency vulnerability lookup sends public repository URLs and tags to api.osv.dev (see below) |
-| `firmware:fix` | the repository and a `findings.json` | edits to the files needed for one finding at a time; git commits only after approval | the project's own build and the static tools above | none, except dependency fetches the user approves |
-| `firmware:oss` | the reviewed repository | the output folder only | bundled Python 3 scripts; ScanCode Toolkit if the user agreed to install it (`install_scancode.py --dry-run` shows the plan first) | only the approved ScanCode install |
+| `amygdala:review` | the reviewed repository | the output folder only (default `firmware-review/`) | bundled Python 3 scripts; cppcheck, clang-tidy, flawfinder, semgrep if already installed | none by default. semgrep runs with metrics off. Tool installs happen only after the user says yes, with the exact command shown first. **Optional, opt-in:** the dependency vulnerability lookup sends public repository URLs and tags to api.osv.dev (see below) |
+| `amygdala:fix` | the repository and a `findings.json` | edits to the files needed for one finding at a time; git commits only after approval | the project's own build and the static tools above | none, except dependency fetches the user approves |
+| `amygdala:oss` | the reviewed repository | the output folder only | bundled Python 3 scripts; ScanCode Toolkit if the user agreed to install it (`install_scancode.py --dry-run` shows the plan first) | only the approved ScanCode install |
 
 None of the skills push to git, rewrite history, change Claude Code settings or hooks, touch `CLAUDE.md` or memory files, or send code, findings or reports anywhere. The optional OSV.dev lookup sends dependency identifiers only, and only with consent.
 
 ## The one thing that can leave the machine: the OSV.dev dependency lookup
 
-`firmware:review` can look up published vulnerabilities for the third-party libraries a product links, using Google's OSV.dev database (https://osv.dev). This is the only network request any skill makes on its own, and it is opt-in on every run:
+`amygdala:review` can look up published vulnerabilities for the third-party libraries a product links, using Google's OSV.dev database (https://osv.dev). This is the only network request any skill makes on its own, and it is opt-in on every run:
 
 - `osv_check.py` first prints a plan listing the exact host (`https://api.osv.dev`) and every identifier it would send, and writes nothing else. The skill shows that plan and asks for a yes before running with `--send`.
 - **What is sent:** for each dependency, the public upstream repository URL and git tag (from ModusToolbox `.mtb` files or `west.yml`), or a package URL. Nothing else: no source code, no project name or path, no findings, no account.
@@ -36,7 +36,7 @@ Each `SKILL.md` carries a "Security rules for this skill" section. In short:
 - **Installs need explicit consent**, never elevated rights, never into a toolchain's private Python.
 - **Secret values are never reproduced.** The reviewer masks them in `findings.json`, chat and commits. The renderer also redacts private-key blocks, quoted credential values, AWS access keys and bearer tokens from every string in `findings.json` before writing `report.html`, `report.md` and `findings.csv`, and prints how many values it redacted.
 - **Risk is described, not weaponised.** No payloads or step-by-step exploitation in reports.
-- **Reports describe the code; they do not change it.** Only `firmware:fix` edits code, and only with the diff shown and approval given.
+- **Reports describe the code; they do not change it.** Only `amygdala:fix` edits code, and only with the diff shown and approval given.
 
 ## Report rendering
 

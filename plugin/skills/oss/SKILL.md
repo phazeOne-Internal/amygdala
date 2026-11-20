@@ -30,7 +30,7 @@ Permissions this skill needs, for the user's benefit: read the repository; write
 ## 1. Understand the product
 
 Find out what's in the repo and what ships. Look for:
-- **MCU firmware:** ModusToolbox (`*.mtb`, `Makefile` with `TARGET`), Zephyr (`west.yml`, `prj.conf`), ESP-IDF (`sdkconfig`), PlatformIO, STM32Cube, plain CMake/Make. The `firmware:review` skill's `detect_platform.py` (`<plugin-root>/skills/review/scripts/`) helps if it's installed.
+- **MCU firmware:** ModusToolbox (`*.mtb`, `Makefile` with `TARGET`), Zephyr (`west.yml`, `prj.conf`), ESP-IDF (`sdkconfig`), PlatformIO, STM32Cube, plain CMake/Make. The `amygdala:review` skill's `detect_platform.py` (`<plugin-root>/skills/review/scripts/`) helps if it's installed.
 - **Embedded Linux:** Yocto (`meta-*/`, `*.bb`, `conf/local.conf`, `tmp/deploy/licenses/`), Buildroot (`Config.in`, `package/*/*.mk`, `.config` with `BR2_`, `legal-info/`), kernel trees (`Kbuild`, `MODULE_LICENSE`), OpenWrt.
 - **Companion apps and services:** `package.json` / `node_modules`, `Podfile.lock`, `build.gradle`, `pubspec.lock`, `go.mod`, `Cargo.toml`, Python `requirements.txt` / `pyproject.toml`, Dockerfiles.
 
@@ -135,7 +135,7 @@ Write `<out-dir>/findings.json` using the `report` profile block in `references/
 python3 <skill-dir>/scripts/render_report.py <out-dir>/findings.json --out-dir <out-dir> --open
 ```
 
-This produces `report.html` (verdict, scorecard, must-resolve list), `report.md` and `findings.csv`. The renderer is the same script as the `firmware:review` skill's, so the HTML report has the same ./phazeOne look and feel: branded header with a **Get in touch** button, hero, light-blue body, call-to-action and footer linking to https://www.phazeone.com/contact. Keep that branding in place.
+This produces `report.html` (verdict, scorecard, must-resolve list), `report.md` and `findings.csv`. The renderer is the same script as the `amygdala:review` skill's, so the HTML report has the same ./phazeOne look and feel: branded header with a **Get in touch** button, hero, light-blue body, call-to-action and footer linking to https://www.phazeone.com/contact. Keep that branding in place.
 
 Always pass `--open`. In an interactive session it launches `report.html` in the default browser when the render finishes and prints `opened ...`. In CI or headless runs (`CI`, `GITHUB_ACTIONS` and similar set, no display on Linux, or an SSH session) it prints `not opening a browser: <reason>` with the `file://` path and exits 0; treat that as success. `FW_REVIEW_OPEN=0` suppresses launching everywhere and `--force-open` launches even in CI. Before the final message, make sure the last render was of the final `findings.json` and ran with `--open`. Fill in `coverage` honestly: no linker map means MCU linkage is `partial`, and no app lockfile means app dependencies are `partial` or `not_reviewed`. An unscanned area must never show Green.
 

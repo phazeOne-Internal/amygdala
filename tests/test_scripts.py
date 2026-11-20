@@ -1,4 +1,4 @@
-"""Cross-platform tests for the firmware plugin's scripts.
+"""Cross-platform tests for the amygdala plugin's scripts.
 
 Runs every bundled script the way the skills run it, on the eval fixtures and on two small
 findings.json fixtures, and checks the outputs. Standard library only; Python 3.8 or later.
@@ -73,11 +73,11 @@ class PluginLayout(unittest.TestCase):
     def test_manifests_agree(self):
         plugin = load(os.path.join(PLUGIN, ".claude-plugin", "plugin.json"))
         market = load(os.path.join(ROOT, ".claude-plugin", "marketplace.json"))
-        self.assertEqual(plugin["name"], "firmware")
+        self.assertEqual(plugin["name"], "amygdala")
         self.assertRegex(plugin["version"], r"^\d+\.\d+\.\d+$")
         entries = {p["name"]: p for p in market["plugins"]}
-        self.assertIn("firmware", entries)
-        self.assertEqual(entries["firmware"]["source"], "./plugin")
+        self.assertIn("amygdala", entries)
+        self.assertEqual(entries["amygdala"]["source"], "./plugin")
 
     def test_skill_names_match_folders(self):
         names = sorted(os.listdir(SKILLS))

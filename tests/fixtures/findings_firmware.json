@@ -4,7 +4,7 @@
     "repo_path": "/tmp/ci-sample-sensor",
     "version": "v0.0.1-test",
     "review_date": "2026-11-20 10:00",
-    "reviewer": "Claude (firmware:review skill)",
+    "reviewer": "Claude (amygdala:review skill)",
     "platform": {
       "summary": "Infineon PSoC 6 · ModusToolbox 3.x · FreeRTOS 10.4 · Wi-Fi · MQTT/TLS",
       "detection_confidence": "high",

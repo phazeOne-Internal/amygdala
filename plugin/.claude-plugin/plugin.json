@@ -2,6 +2,9 @@
   "name": "amygdala",
   "description": "Amygdala, from ./phazeOne: spots the dangers in embedded / IoT firmware before they reach the field. RAG-rated firmware review, open-source licence review and guided fixing of the findings.",
   "version": "0.2.0",
+  "license": "Apache-2.0",
+  "homepage": "https://www.phazeone.com",
+  "repository": "https://github.com/phazeOne-Internal/amygdala",
   "author": {
     "name": "./phazeOne",
     "email": "hello@phazeone.com",

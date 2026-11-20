@@ -54,7 +54,7 @@ jobs:
         run: |
           cd plugin/skills/review/evals/psoc6-mqtt-sensor-release/files/psoc6-mqtt-sensor
           semgrep --version
-          semgrep scan --config ../../../../assets/semgrep/embedded-c.yml --metrics=off --json --disable-version-check --timeout 30 source include 2>semgrep.err > semgrep.json || true
+          semgrep scan --config ../../../../assets/semgrep/embedded-c.yml --metrics=off --json --disable-version-check --timeout 30 source 2>semgrep.err > semgrep.json || true
           python -c "import json; d=json.load(open('semgrep.json')); print('results', len(d.get('results', [])), 'errors', d.get('errors', [])[:5]); print('paths', d.get('paths'))"
           echo '--- stderr ---'; cat semgrep.err
           rm -f semgrep.err semgrep.json

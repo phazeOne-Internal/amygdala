@@ -119,6 +119,87 @@ RULES = [
 ]
 PRESENCE_RULES = {"watchdog", "reset-reason", "version", "fault-handler"}
 
+# A blocking / non-ISR-safe call whose enclosing function is an interrupt handler is reported under this id,
+# listed first, instead of the generic "check if in ISR context" bucket. Handlers are recognised two ways:
+# by name, and by being passed to an interrupt / callback registration API anywhere in the first-party tree.
+ISR_IN_HANDLER = ("isr-blocking-in-isr", "concurrency",
+                  "Blocking / non-ISR-safe call INSIDE an interrupt handler (handler identified by name or registration)")
+ISR_NAME_RX = re.compile(r"(?i)(^|_)(irq|isr)(_|$)|IRQHandler$|_Handler$")   # *_cb / *_callback only via registration
+# (regex, group holding the handler name) — registration APIs across the SDKs the skill knows
+ISR_REGISTRATION_RX = [
+    (re.compile(r"\b(?:MXC_)?NVIC_SetVector\s*\(\s*\w+\s*,\s*(\w+)\s*\)"), 1),                  # CMSIS / Maxim MSDK
+    (re.compile(r"\bIRQ_(?:DIRECT_)?CONNECT\s*\([^,]+,[^,]+,\s*(\w+)"), 1),                      # Zephyr static
+    (re.compile(r"\birq_connect_dynamic\s*\([^,]+,[^,]+,\s*(\w+)"), 1),                          # Zephyr dynamic
+    (re.compile(r"\bgpio_init_callback\s*\([^,]+,\s*(\w+)"), 1),                                 # Zephyr GPIO callback (ISR context)
+    (re.compile(r"\bk_timer_init\s*\([^,]+,\s*(\w+)"), 1),                                       # Zephyr timer expiry (ISR context)
+    (re.compile(r"\bCy_SysInt_Init\s*\([^,]+,\s*(\w+)"), 1),                                     # PSoC PDL
+    (re.compile(r"\bcyhal_\w+_register_callback\s*\([^,]+,\s*(?:\(\w+\))?\s*&?(\w+)"), 1),      # PSoC HAL (GPIO, timer, UART, ...)
+    (re.compile(r"\bHAL_\w+_RegisterCallback\s*\([^,]+,[^,]+,\s*(\w+)"), 1),                     # STM32 HAL
+    (re.compile(r"\bgpio_isr_handler_add\s*\([^,]+,\s*(\w+)"), 1),                               # ESP-IDF
+    (re.compile(r"\besp_intr_alloc\s*\([^,]+,[^,]+,\s*(\w+)"), 1),                               # ESP-IDF
+    (re.compile(r"\battachInterrupt\s*\([^,]+,\s*(\w+)"), 1),                                    # Arduino
+    (re.compile(r"\bnrfx_\w+_init\s*\([^,]+,(?:[^,]+,)?\s*(\w+_handler|\w+_cb|\w+_isr)"), 1),     # nrfx driver event handlers
+    (re.compile(r"\bNVIC_SetVector\s*\(\s*\w+\s*,\s*\(uint32_t\)\s*(\w+)"), 1),               # CMSIS with cast
+    (re.compile(r"(?:\.|->)callback\s*=\s*&?(\w+)"), 1),                                        # callback_data.callback = fn (cyhal 2.x and similar)
+]
+BLOCKING_CALL_RX = re.compile(r"\b(printf|puts|cy_log_msg|vTaskDelay|cyhal_system_delay_ms|xSemaphoreTake|xQueueReceive|"
+                              r"k_sleep|k_msleep|k_mutex_lock|k_sem_take|HAL_Delay|malloc|free|Cy_SysLib_Delay\w*|"
+                              r"cyhal_flash_\w+|Cy_Flash_\w+|flash_\w*write\w*|nvs_write\w*|settings_save\w*)\s*\(")
+CALL_RX = re.compile(r"\b([A-Za-z_]\w*)\s*\(")
+CALL_SKIP = {"if", "for", "while", "switch", "return", "sizeof", "defined"}
+FUNC_DEF_RX = re.compile(r"^[ \t]*(?:static\s+)?(?:inline\s+)?(?:void|int|uint32_t|bool)\s+\*?(\w+)\s*\([^;{)]*\)\s*\{", re.M)
+
+
+def registered_handlers(texts):
+    names = set()
+    for text in texts:
+        for rx, grp in ISR_REGISTRATION_RX:
+            for m in rx.finditer(text):
+                names.add(m.group(grp))
+    return names
+
+
+def function_bodies(text):
+    """[(name, start, end)] for every C function definition in the file (brace matching; good enough for firmware)."""
+    out = []
+    for m in FUNC_DEF_RX.finditer(text):
+        depth, i, n = 0, m.end() - 1, len(text)
+        while i < n:
+            c = text[i]
+            if c == "{":
+                depth += 1
+            elif c == "}":
+                depth -= 1
+                if depth == 0:
+                    break
+            i += 1
+        out.append((m.group(1), m.start(), i))
+    return out
+
+
+def isr_bodies(bodies, registered):
+    return [(n, a, b) for n, a, b in bodies if n in registered or ISR_NAME_RX.search(n)]
+
+
+def blocking_functions(all_bodies):
+    """Names of first-party functions that block: their body contains a blocking / non-ISR-safe call, or calls
+    another first-party function that does (transitively, so handler -> helper -> helper -> k_sleep is seen)."""
+    direct, calls = set(), {}
+    for text, bodies in all_bodies:
+        for name, a, b in bodies:
+            if BLOCKING_CALL_RX.search(text, a, b):
+                direct.add(name)
+            calls[name] = {m.group(1) for m in CALL_RX.finditer(text, a, b)} - CALL_SKIP - {name}
+    names = set(direct)
+    changed = True
+    while changed:
+        changed = False
+        for fn, callees in calls.items():
+            if fn not in names and callees & names:
+                names.add(fn)
+                changed = True
+    return names
+
 
 def excluded(parts, excludes, includes):
     for p in parts[:-1]:
@@ -151,6 +232,7 @@ def main():
     counts = defaultdict(int)
     key_files = []
     files_scanned = 0
+    loaded = []   # (rel, kind, lines, text) for every file to scan; small enough for firmware trees
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if not d.startswith(".")]
         for fn in filenames:
@@ -176,29 +258,56 @@ def main():
             except OSError:
                 continue
             files_scanned += 1
-            text = "".join(lines)
-            line_starts = [0]
-            for ln in lines:
-                line_starts.append(line_starts[-1] + len(ln))
-            for rid, cat, desc, rx, rkind in compiled:
-                if rkind != "any" and rkind != kind:
-                    continue
-                for m in rx.finditer(text):
-                    # line number via bisect
-                    lo, hi = 0, len(line_starts) - 1
-                    while lo < hi:
-                        mid = (lo + hi + 1) // 2
-                        if line_starts[mid] <= m.start():
-                            lo = mid
-                        else:
-                            hi = mid - 1
-                    lineno = lo + 1
-                    snippet = lines[lo].strip()[:160] if lo < len(lines) else ""
-                    counts[rid] += 1
-                    if len(hits[rid]) < args.max_per_rule:
-                        hits[rid].append({"file": rel, "line": lineno, "code": snippet})
+            loaded.append((rel, kind, lines, "".join(lines)))
+
+    registered = registered_handlers(t for _, k, _, t in loaded if k == "src")
+    all_bodies = [(t, function_bodies(t)) for _, k, _, t in loaded if k == "src"]
+    blockers = blocking_functions(all_bodies)
+    isr_inventory = []   # (file, line, name)
+    for rel, kind, lines, text in loaded:
+        bodies = isr_bodies(function_bodies(text), registered) if kind == "src" else []
+        for name, start, end in bodies:
+            isr_inventory.append((rel, text.count("\n", 0, start) + 1, name))
+            # calls from this handler to a first-party function that itself blocks
+            for cm in CALL_RX.finditer(text, start, end):
+                callee = cm.group(1)
+                if callee in blockers and callee != name and callee not in CALL_SKIP:
+                    ln = text.count("\n", 0, cm.start()) + 1
+                    counts[ISR_IN_HANDLER[0]] += 1
+                    if len(hits[ISR_IN_HANDLER[0]]) < args.max_per_rule:
+                        hits[ISR_IN_HANDLER[0]].append({"file": rel, "line": ln, "code": lines[ln - 1].strip()[:160],
+                                                        "isr": name, "via": callee})
+        line_starts = [0]
+        for ln in lines:
+            line_starts.append(line_starts[-1] + len(ln))
+        for rid, cat, desc, rx, rkind in compiled:
+            if rkind != "any" and rkind != kind:
+                continue
+            for m in rx.finditer(text):
+                # line number via bisect
+                lo, hi = 0, len(line_starts) - 1
+                while lo < hi:
+                    mid = (lo + hi + 1) // 2
+                    if line_starts[mid] <= m.start():
+                        lo = mid
+                    else:
+                        hi = mid - 1
+                lineno = lo + 1
+                snippet = lines[lo].strip()[:160] if lo < len(lines) else ""
+                hit = {"file": rel, "line": lineno, "code": snippet}
+                use = rid
+                if rid == "isr-blocking":
+                    for name, start, end in bodies:
+                        if start <= m.start() <= end:
+                            use = ISR_IN_HANDLER[0]
+                            hit["isr"] = name
+                            break
+                counts[use] += 1
+                if len(hits[use]) < args.max_per_rule:
+                    hits[use].append(hit)
 
     meta = {rid: (cat, desc) for rid, cat, desc, _, _ in RULES}
+    meta[ISR_IN_HANDLER[0]] = (ISR_IN_HANDLER[1], ISR_IN_HANDLER[2])
     absent = [rid for rid in PRESENCE_RULES if counts[rid] == 0]
 
     if args.json:
@@ -206,6 +315,7 @@ def main():
             "root": root, "files_scanned": files_scanned,
             "hits": {rid: {"category": meta[rid][0], "description": meta[rid][1], "count": counts[rid], "samples": hits[rid]} for rid in hits},
             "absent_presence_checks": absent, "key_files": key_files,
+            "interrupt_handlers": [{"file": f, "line": l, "name": n} for f, l, n in isr_inventory],
         }, sys.stdout, indent=2)
         print()
         return
@@ -222,6 +332,12 @@ def main():
         for k in key_files:
             print(f"- `{k}`")
         print()
+    if isr_inventory:
+        print("## Interrupt handlers found (by name or registration call)\n")
+        print("Calls flagged inside these run in interrupt context: no printf, blocking RTOS calls, delays, flash writes or malloc.\n")
+        for f, l, n in sorted(isr_inventory):
+            print(f"- `{f}:{l}` — `{n}`")
+        print()
     by_cat = defaultdict(list)
     for rid in hits:
         by_cat[meta[rid][0]].append(rid)
@@ -230,11 +346,14 @@ def main():
         if cat not in by_cat:
             continue
         print(f"## {cat}\n")
-        for rid in sorted(by_cat[cat], key=lambda r: -counts[r]):
+        for rid in sorted(by_cat[cat], key=lambda r: (r != ISR_IN_HANDLER[0], -counts[r])):
             more = counts[rid] - len(hits[rid])
             print(f"### {meta[rid][1]} (`{rid}`) — {counts[rid]} hit(s)\n")
             for h in hits[rid]:
-                print(f"- `{h['file']}:{h['line']}` — `{h['code']}`")
+                where = f" (in handler `{h['isr']}`)" if h.get("isr") else ""
+                if h.get("via"):
+                    where = f" (in handler `{h['isr']}`, calls `{h['via']}` which blocks)"
+                print(f"- `{h['file']}:{h['line']}` — `{h['code']}`{where}")
             if more > 0:
                 print(f"- … {more} more")
             print()

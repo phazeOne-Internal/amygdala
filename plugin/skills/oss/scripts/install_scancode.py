@@ -66,6 +66,11 @@ def base_python():
 def supported_python():
     """Path of an installed Python in a version ScanCode supports, or None."""
     cands = []
+    # The interpreter running this script is the natural first choice when its version is supported;
+    # otherwise pipx may silently pick its own (possibly newer, unsupported) Python.
+    running = "%d.%d" % sys.version_info[:2]
+    if running in SUPPORTED and sys.prefix == sys.base_prefix:
+        cands.append(sys.executable)
     for v in SUPPORTED:
         cands += [shutil.which(f"python{v}"), f"/opt/homebrew/opt/python@{v}/bin/python{v}", f"/usr/local/opt/python@{v}/bin/python{v}",
                   f"/usr/bin/python{v}"]

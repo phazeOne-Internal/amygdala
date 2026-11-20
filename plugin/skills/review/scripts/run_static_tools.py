@@ -120,7 +120,7 @@ def user_script_dirs():
     for scheme in ("nt_user", "osx_framework_user", "posix_user"):
         try:
             d = sysconfig.get_path("scripts", scheme)
-        except (KeyError, ValueError):
+        except Exception:  # noqa: BLE001  (schemes differ by version and platform; any failure just means "no such folder")
             continue
         if d:
             dirs.append(d)

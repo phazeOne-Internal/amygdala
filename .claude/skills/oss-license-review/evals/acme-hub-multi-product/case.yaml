@@ -1,0 +1,11 @@
+schema_version: "1.1"
+name: acme-hub-multi-product
+context:
+  scaffold_script: place-files.sh
+expected_outcome: |
+  Red: GPL-2.0+ crc16.c compiled into the MCU firmware; LGPL-2.1 libmodbus statically linked into the MCU image;
+  proprietary acme-agent linking GPL-3.0 readline (and GPLv3 vs signed/dm-verity boot); proprietary kernel module;
+  GPL-3.0 npm runtime dependency rn-ble-gpl in the app; Highcharts non-commercial terms; Stack Overflow snippet.
+  Not Red: GPL-3.0 plot.c in an unbuilt COMPONENT_ folder, GPL build script gen_version.py, eslint devDependency.
+  Amber: BusyBox / kernel / glibc source-offer obligations; MongoDB SSPL used as an unmodified separate service.
+  Produces a RAG report with verdict and legal disclaimer, a THIRD_PARTY_NOTICES draft and a CycloneDX SBOM.

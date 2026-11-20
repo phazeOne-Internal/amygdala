@@ -330,10 +330,12 @@ def run_scancode(path, root, out_dir, excludes, jobs, timeout):
            "-n", str(jobs), "--timeout", "120"]
     for e in sorted(excludes):
         cmd += ["--ignore", f"*/{e}/*", "--ignore", f"{e}/*"]
-    cmd.append(root)
-    print(f"Running ScanCode (can take a long time on large trees): {' '.join(cmd)}", file=sys.stderr)
+    # Scan "." from the repo root: ScanCode on Windows rejects absolute input paths ("all input paths must be
+    # relative"), and a relative input behaves the same everywhere. --strip-root keeps the output paths repo-relative.
+    cmd.append(".")
+    print(f"Running ScanCode (can take a long time on large trees) in {root}: {' '.join(cmd)}", file=sys.stderr)
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, encoding="utf-8", errors="replace")
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, encoding="utf-8", errors="replace", cwd=root)
     except subprocess.TimeoutExpired:
         return None, f"ScanCode timed out after {timeout}s; re-run with a larger --scancode-timeout or on a subtree"
     except OSError as ex:
@@ -341,6 +343,21 @@ def run_scancode(path, root, out_dir, excludes, jobs, timeout):
     if r.returncode not in (0, 1) or not os.path.isfile(out):   # 1 = completed with some per-file errors
         return None, f"ScanCode failed (exit {r.returncode}): {(r.stderr or r.stdout)[-600:]}"
     return out, f"ScanCode completed (exit {r.returncode}{', some files had errors' if r.returncode == 1 else ''})"
+
+
+def windows_pip():
+    """`py -3.X` for the newest installed Python that ScanCode has prebuilt wheels for, else plain `py`.
+    Plain `py` runs the newest Python on the machine, which is often newer than the tools support."""
+    if OS != "windows" or not shutil.which("py"):
+        return "py"
+    for v in ("3.12", "3.11", "3.13", "3.10"):
+        try:
+            r = subprocess.run(["py", f"-{v}", "-c", "pass"], capture_output=True, timeout=30)
+            if r.returncode == 0:
+                return f"py -{v}"
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+    return "py"
 
 
 def check():
@@ -354,10 +371,11 @@ def check():
     install = {
         "macos": ["pipx install scancode-toolkit", "python3 -m pip install --user scancode-toolkit"],
         "linux": ["pipx install scancode-toolkit", "python3 -m pip install --user scancode-toolkit"],
-        "windows": ["py -m pip install --user scancode-toolkit"],
+        "windows": [f"{windows_pip()} -m pip install --user scancode-toolkit"],
     }[OS]
-    note = {"windows": "If pip cannot build it for this Python, use the self-contained Windows release archive from "
-                       "https://github.com/aboutcode-org/scancode-toolkit/releases."}.get(OS)
+    note = {"windows": "The command names a Python version ScanCode has prebuilt wheels for; plain `py` would use your "
+                       "newest Python, which may be too new. If pip cannot build it, use the self-contained Windows "
+                       "release archive from https://github.com/aboutcode-org/scancode-toolkit/releases."}.get(OS)
     return {"os": OS, "scancode": {"installed": bool(p), "path": p, "version": ver,
             "size": "large (several hundred MB with licence data); first run is slow",
             "install_commands": install, "install_note": note,

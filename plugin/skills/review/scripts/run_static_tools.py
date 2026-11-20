@@ -105,10 +105,35 @@ TOOLS = {
             "linux": ["python3 -m pip install --user semgrep"],
             "windows": ["py -m pip install --user semgrep"],
         },
-        "install_note": {"windows": "Native Windows support in semgrep is recent; if the pip install or the first run fails, use WSL."},
+        "install_note": {"windows": "The command names a Python version semgrep has prebuilt wheels for; plain `py` would use "
+                                    "your newest Python, which may be too new. Native Windows support in semgrep is recent; "
+                                    "if the install or the first run still fails, use WSL."},
         "size": "medium (~200 MB)",
     },
 }
+
+
+def windows_pip():
+    """`py -3.X` for the newest installed Python the pip-installed tools have prebuilt wheels for, else `py`.
+    Plain `py` runs the newest Python on the machine, which is often newer than semgrep's dependencies support."""
+    if OS != "windows" or not shutil.which("py"):
+        return "py"
+    for v in ("3.13", "3.12", "3.11", "3.10", "3.9"):
+        try:
+            r = subprocess.run(["py", f"-{v}", "-c", "pass"], capture_output=True, timeout=30)
+            if r.returncode == 0:
+                return f"py -{v}"
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+    return "py"
+
+
+def install_commands(t):
+    cmds = t["install"].get(OS, [])
+    if OS == "windows":
+        launcher = windows_pip()
+        cmds = [c.replace("py -m pip", f"{launcher} -m pip") for c in cmds]
+    return cmds
 
 
 def user_script_dirs():
@@ -368,7 +393,7 @@ def check(root):
         tools[name] = {
             "installed": bool(p), "path": p, "version": tool_version(p) if p else None,
             "purpose": t["purpose"], "size": t["size"],
-            "install_commands": t["install"].get(OS, []),
+            "install_commands": install_commands(t),
             "install_note": t.get("install_note", {}).get(OS),
         }
     db = find_compile_db(root)

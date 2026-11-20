@@ -315,8 +315,14 @@ def run_semgrep(path, root, srcs, incs, args):
                       "severity": r.get("extra", {}).get("severity", "").lower(),
                       "file": rel(root, r.get("path", "")), "line": r.get("start", {}).get("line", 0),
                       "message": r.get("extra", {}).get("message", "").strip()})
-    errs = len(data.get("errors", []))
-    return leads, "ran", "bundled embedded-c rules, local only" + (f"; {errs} parse error(s)" if errs else "")
+    errors = data.get("errors", [])
+    fatal = [e for e in errors if e.get("level") == "error"]
+    scanned = (data.get("paths") or {}).get("scanned")
+    if fatal and not leads and not scanned:
+        # The engine died (semgrep reports "the engine was killed" this way); zero leads would be a lie.
+        msg = " ".join(str(fatal[0].get("message", "")).split())[:200]
+        return [], "failed", f"semgrep engine error, nothing scanned: {msg}"
+    return leads, "ran", "bundled embedded-c rules, local only" + (f"; {len(errors)} parse error(s)" if errors else "")
 
 
 RUNNERS = {"cppcheck": run_cppcheck, "clang-tidy": run_clang_tidy, "flawfinder": run_flawfinder, "semgrep": run_semgrep}

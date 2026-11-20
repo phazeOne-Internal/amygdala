@@ -52,6 +52,16 @@ Scripts are plain Python 3 (3.8 or later) with no third-party dependencies and r
 
 `plugin/skills/review/evals/` and `plugin/skills/oss/evals/` hold the eval cases (synthetic firmware projects with planted defects, plus graders). Run them with `claude plugin eval` or the skill-creator eval runner. Eval fixtures include deliberately committed sample keys and credentials; they are test data, not real secrets.
 
+## Testing
+
+`tests/test_scripts.py` runs every bundled script the way the skills do, on the eval fixtures and on two sample `findings.json` files, and checks the outputs: platform detection, hotspot and static-tool leads, the OSV plan mode (nothing is sent), report rendering with the firmware and licence profiles, secret redaction, the CI browser guard, the licence inventory, notices and SBOM generation, and the fix tracker. Standard library only:
+
+```
+python -m unittest discover -s tests -v
+```
+
+GitHub Actions (`.github/workflows/ci.yml`) runs it on every pull request and push to `main` on Ubuntu, Windows and macOS with the oldest supported Python and the current one, once more on Ubuntu with cppcheck, flawfinder and semgrep installed so the analyser integration is exercised for real, and validates the plugin and marketplace manifests with `claude plugin validate`. The model-graded evals under `plugin/skills/*/evals/` are not part of CI; run them locally with `claude plugin eval`.
+
 ## Security
 
 See [SECURITY.md](SECURITY.md) for what each skill reads, writes, executes and needs from the network, the rules every skill follows (repository contents are untrusted data; nothing leaves the machine; installs need consent; secret values are redacted from reports), and how to report a vulnerability. The skills are maintained against the [OWASP Agentic Skills Top 10](https://github.com/OWASP/www-project-agentic-skills-top-10) guidance for skill developers.

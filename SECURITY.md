@@ -54,7 +54,7 @@ Each `SKILL.md` carries a "Security rules for this skill" section. In short:
 
 ## Test fixtures
 
-`.claude/skills/*/evals/` contains synthetic projects with deliberately planted defects, including sample private keys, hard-coded passwords and vendor test signing keys, so the review skills can be tested. They are not real credentials and grant access to nothing. Secret scanners will flag them; that is expected.
+`plugin/skills/*/evals/` contains synthetic projects with deliberately planted defects, including sample private keys, hard-coded passwords and vendor test signing keys, so the review skills can be tested. They are not real credentials and grant access to nothing. Secret scanners will flag them; that is expected.
 
 ## Known limitations
 

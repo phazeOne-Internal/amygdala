@@ -96,6 +96,27 @@ def scancode_works(path):
     return (r.returncode == 0 and "ScanCode version" in out), out.strip()[-600:]
 
 
+def libmagic_missing():
+    """ScanCode's file-type detection needs libmagic. The typecode-libmagic wheel bundles it on Linux, Windows
+    and Intel macOS but not on Apple Silicon, where ScanCode falls back to a system libmagic (Homebrew's)."""
+    if platform.system() != "Darwin":
+        return False
+    import ctypes.util
+    if ctypes.util.find_library("magic"):
+        return False
+    for c in ("/opt/homebrew/lib/libmagic.dylib", "/usr/local/lib/libmagic.dylib"):
+        if os.path.isfile(c):
+            return False
+    return True
+
+
+def prerequisites():
+    """Commands that must run before any install method; empty when nothing is needed."""
+    if libmagic_missing() and shutil.which("brew"):
+        return [("brew libmagic", [["brew", "install", "libmagic"]])]
+    return []
+
+
 def plan():
     """List of (method, [commands]) to try in order; each method may need several commands."""
     pipx = shutil.which("pipx")
@@ -128,7 +149,20 @@ def main():
         if works:
             print(json.dumps({"status": "already_installed", "path": existing, "version": [l for l in out.splitlines() if "version" in l.lower() and "warn" not in l.lower()]}, indent=2))
             return
-        # Installed but broken: the usual cause is the pluggy incompatibility; repair it if pipx manages ScanCode.
+        # Installed but broken: libmagic missing (Apple Silicon) or the pluggy incompatibility.
+        if "libmagic" in out and libmagic_missing():
+            for _, cmds in prerequisites():
+                for cmd in cmds:
+                    if args.dry_run:
+                        print(json.dumps({"status": "installed_but_broken", "path": existing, "error": out[-400:],
+                                          "repair": " ".join(cmd)}, indent=2))
+                        return
+                    print(f"Running: {' '.join(cmd)}  (prerequisite)", file=sys.stderr)
+                    subprocess.run(cmd, capture_output=True, text=True, timeout=args.timeout)
+            works, out = scancode_works(existing)
+            if works:
+                print(json.dumps({"status": "repaired", "path": existing, "detail": "installed libmagic"}, indent=2))
+                return
         pipx = shutil.which("pipx")
         repair = [pipx, "runpip", PKG, "install", PLUGGY_PIN] if pipx else None
         if args.dry_run or not repair:
@@ -143,7 +177,9 @@ def main():
             sys.exit(1)
         return
     steps = plan()
+    prereqs = prerequisites()
     info = {"os": platform.system(), "python": sys.version.split()[0],
+            "prerequisites": [{"method": m, "commands": [" ".join(c) for c in cmds]} for m, cmds in prereqs],
             "planned": [{"method": m, "commands": [" ".join(c) for c in cmds]} for m, cmds in steps],
             "in_virtualenv": sys.prefix != sys.base_prefix,
             "scancode_python": supported_python() or "none of " + ", ".join(SUPPORTED) + " found; using default",
@@ -154,6 +190,19 @@ def main():
         return
 
     attempts = []
+    for name, cmds in prereqs:
+        for cmd in cmds:
+            print(f"Running: {' '.join(cmd)}  (prerequisite)", file=sys.stderr)
+            try:
+                r = subprocess.run(cmd, capture_output=True, text=True, timeout=args.timeout, encoding="utf-8", errors="replace")
+                attempts.append({"method": name, "command": " ".join(cmd), "ok": r.returncode == 0, "tail": (r.stdout + r.stderr)[-1200:]})
+            except (OSError, subprocess.TimeoutExpired) as ex:
+                attempts.append({"method": name, "command": " ".join(cmd), "ok": False, "tail": str(ex)})
+    if libmagic_missing():
+        print(json.dumps({"status": "failed", **info, "attempts": attempts,
+                          "next": "ScanCode needs libmagic on Apple Silicon: install Homebrew (https://brew.sh) and run "
+                                  "`brew install libmagic`, then re-run this installer."}, indent=2))
+        sys.exit(1)
     for name, cmds in steps:
         ok = True
         for cmd in cmds:

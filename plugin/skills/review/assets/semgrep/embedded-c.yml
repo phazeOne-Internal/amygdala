@@ -1,4 +1,4 @@
-# Embedded / IoT firmware rules for the ./phazeOne firmware:review skill.
+# Embedded / IoT firmware rules for the ./phazeOne amygdala:review skill.
 # Run locally:  semgrep scan --config embedded-c.yml --metrics=off <dirs>
 # These produce leads; the reviewer verifies each one in context.
 rules:

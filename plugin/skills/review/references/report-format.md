@@ -32,7 +32,7 @@ Each **area** in the scorecard takes the worst rating of its findings. An area w
     "repo_path": "/path/to/repo",
     "version": "v1.4.2 or git commit if known",
     "review_date": "2026-11-19 14:05",
-    "reviewer": "Claude (firmware:review skill)",
+    "reviewer": "Claude (amygdala:review skill)",
     "platform": {
       "summary": "Infineon PSoC 6 (CY8C624ABZI) · ModusToolbox 3.x · FreeRTOS 10.5 · Wi-Fi (AIROC CYW43012) · MQTT/TLS to AWS IoT",
       "detection_confidence": "high",

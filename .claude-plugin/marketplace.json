@@ -1,15 +1,15 @@
 {
-  "name": "phazeone-firmware",
-  "description": "./phazeOne firmware code review plugins",
+  "name": "phazeone-amygdala",
+  "description": "./phazeOne Amygdala: firmware danger detection plugins",
   "owner": {
     "name": "./phazeOne",
     "email": "hello@phazeone.com"
   },
   "plugins": [
     {
-      "name": "firmware",
+      "name": "amygdala",
       "source": "./plugin",
-      "description": "Firmware review, OSS licence review and guided fixing for embedded / IoT firmware"
+      "description": "Firmware review, open-source licence review and guided fixing for embedded / IoT firmware"
     }
   ]
 }

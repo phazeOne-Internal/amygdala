@@ -141,7 +141,7 @@ def apply_profile(d):
 
 
 CONFIDENCES = {"confirmed", "likely", "needs-verification"}
-# Fix-tracking status (set by the firmware:fix skill). Absent means "open".
+# Fix-tracking status (set by the amygdala:fix skill). Absent means "open".
 STATUSES = {
     "open": "Open", "in_progress": "In progress", "fixed": "Fixed",
     "fixed_needs_hw": "Fixed in code, needs hardware test", "action_required": "Code fixed, human action required",

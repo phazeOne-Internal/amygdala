@@ -38,7 +38,7 @@ if sys.version_info < (3, 8):
     sys.exit("This script needs Python 3.8 or later (any interpreter on PATH is fine); found " + sys.version.split()[0])
 
 OSV_HOST = "https://api.osv.dev"
-USER_AGENT = "phazeone-firmware-plugin/0.1 (OSV dependency lookup)"
+USER_AGENT = "phazeone-amygdala/0.2 (OSV dependency lookup)"
 TIMEOUT = 30
 
 # Upstream aliases for vendor mirrors: query the mirror as given AND the upstream, because advisories are
@@ -130,7 +130,7 @@ def collect_west(root):
 
 
 def collect_components(path):
-    """Components from the firmware:oss skill (confirmed_components.json) that carry a purl."""
+    """Components from the amygdala:oss skill (confirmed_components.json) that carry a purl."""
     deps = []
     try:
         data = json.load(open(path, encoding="utf-8"))
@@ -223,7 +223,7 @@ def severity_of(v):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("root", help="repository root (scanned for *.mtb and west.yml)")
-    ap.add_argument("--components", help="confirmed_components.json from the firmware:oss skill")
+    ap.add_argument("--components", help="confirmed_components.json from the amygdala:oss skill")
     ap.add_argument("--dep", action="append", default=[], metavar="URL@TAG", help="extra dependency, e.g. https://github.com/madler/zlib@v1.2.11")
     ap.add_argument("--out-dir", required=True)
     ap.add_argument("--send", action="store_true", help="actually send the queries to api.osv.dev (only after the user agreed)")

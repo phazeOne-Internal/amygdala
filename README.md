@@ -55,6 +55,7 @@ plugin/
 evals/
   review/                          eval cases for amygdala:review (synthetic projects with planted defects, plus the eCTF 2025 insecure example)
   oss/                             eval cases for amygdala:oss
+  fix/                             eval cases for amygdala:fix (findings file + git baseline; checks the one-fix-at-a-time workflow)
   run.py                           runs the cases through claude plugin eval
 docs/examples/                     example reports (served by GitHub Pages)
 tests/                             script test suite and its two sample findings files
@@ -71,7 +72,7 @@ Scripts are plain Python 3 (3.8 or later) with no third-party dependencies and r
 
 ## Evals
 
-`evals/review/` and `evals/oss/` hold the eval cases: synthetic firmware projects with planted defects, one real third-party design (MITRE's eCTF 2025 insecure example decoder, Apache-2.0, see `evals/review/ectf-2025-insecure-example/README.md`), and the graders for each. They live outside `plugin/` so an installed plugin never carries them. Run them with `python evals/run.py review|oss|all`, which assembles a temporary copy of the plugin with the cases inside and calls `claude plugin eval`; each case runs the skill for real and costs tokens. Eval fixtures include deliberately committed sample keys and credentials; they are test data, not real secrets.
+`evals/review/`, `evals/oss/` and `evals/fix/` hold the eval cases: synthetic firmware projects with planted defects, a findings file plus git baseline for the fix workflow, one real third-party design (MITRE's eCTF 2025 insecure example decoder, Apache-2.0, see `evals/review/ectf-2025-insecure-example/README.md`), and the graders for each. They live outside `plugin/` so an installed plugin never carries them. Run them with `python evals/run.py review|oss|all`, which assembles a temporary copy of the plugin with the cases inside and calls `claude plugin eval`; each case runs the skill for real and costs tokens. Eval fixtures include deliberately committed sample keys and credentials; they are test data, not real secrets.
 
 ## Testing
 

@@ -1,0 +1,189 @@
+{
+  "project": {
+    "name": "psoc6-smart-plug",
+    "repo_path": "psoc6-smart-plug",
+    "version": "2.3.0",
+    "review_date": "2026-11-20 14:00",
+    "reviewer": "./phazeOne amygdala:review",
+    "platform": {
+      "summary": "Infineon PSoC 6 (CY8CPROTO-062-4343W) \u00b7 ModusToolbox 3.x \u00b7 FreeRTOS \u00b7 Wi-Fi \u00b7 TLS control channel",
+      "detection_confidence": "high",
+      "notes": "Detected from Makefile (TARGET, COMPONENTS) and cyhal/cybsp usage"
+    },
+    "scope": {
+      "first_party_paths": [
+        "source/",
+        "configs/"
+      ],
+      "excluded_paths": [
+        "deps/"
+      ],
+      "files_reviewed": 8,
+      "first_party_loc": 520
+    }
+  },
+  "summary": {
+    "overview": "Smart plug firmware with a TLS-protected binary control protocol. The frame parser has a length-arithmetic defect that lets a crafted frame pass the completeness check and be read beyond the received buffer before the MAC is verified, plus an off-by-one write at the maximum payload size. Otherwise the parser is compact and the protocol is authenticated and replay-protected.",
+    "key_risks": [
+      "Frame length wraparound in protocol_handle_frame allows an out-of-bounds read before MAC verification",
+      "Off-by-one write past the payload buffer at the maximum payload length"
+    ],
+    "strengths": [
+      "Every control frame is HMAC-SHA256 authenticated and sequence-checked",
+      "Device name copy is bounded and NUL-terminated"
+    ]
+  },
+  "coverage": [
+    {
+      "area": "memory-safety",
+      "status": "reviewed",
+      "notes": ""
+    },
+    {
+      "area": "security",
+      "status": "reviewed",
+      "notes": ""
+    },
+    {
+      "area": "robustness",
+      "status": "reviewed",
+      "notes": ""
+    },
+    {
+      "area": "concurrency",
+      "status": "reviewed",
+      "notes": ""
+    },
+    {
+      "area": "code-quality",
+      "status": "reviewed",
+      "notes": ""
+    },
+    {
+      "area": "secure-boot-ota",
+      "status": "not_reviewed",
+      "notes": "Out of scope for this focused parser review"
+    },
+    {
+      "area": "hardware-power",
+      "status": "not_reviewed",
+      "notes": "Out of scope for this focused parser review"
+    },
+    {
+      "area": "dependencies",
+      "status": "not_reviewed",
+      "notes": "Out of scope for this focused parser review"
+    },
+    {
+      "area": "field-readiness",
+      "status": "not_reviewed",
+      "notes": "Out of scope for this focused parser review"
+    },
+    {
+      "area": "regulatory",
+      "status": "not_reviewed",
+      "notes": "Out of scope for this focused parser review"
+    }
+  ],
+  "tools": [
+    {
+      "name": "hotspots.py",
+      "status": "ran",
+      "notes": "6 leads"
+    },
+    {
+      "name": "cppcheck 2.22.0",
+      "status": "ran",
+      "notes": "2 leads"
+    },
+    {
+      "name": "semgrep",
+      "status": "ran",
+      "notes": "bundled embedded-c rules, local only"
+    },
+    {
+      "name": "clang-tidy",
+      "status": "skipped",
+      "notes": "no compile_commands.json"
+    }
+  ],
+  "findings": [
+    {
+      "id": "FW-001",
+      "title": "16-bit frame length arithmetic wraps, so an oversized len passes the completeness check and is read past the buffer before the MAC check",
+      "rag": "red",
+      "category": "memory-safety",
+      "confidence": "confirmed",
+      "location": {
+        "file": "source/app/protocol.c",
+        "line": 42
+      },
+      "other_locations": [
+        {
+          "file": "source/app/protocol.c",
+          "line": 46
+        }
+      ],
+      "evidence": "uint16_t total = HDR_LEN + len + MAC_LEN;\nif (total > rx_len) {\n    return -2;   /* incomplete */\n}\nif (!mac_ok(buf, HDR_LEN + len, buf + HDR_LEN + len)) {",
+      "description": "len is a 16-bit value taken from the frame. HDR_LEN + len + MAC_LEN is computed in int and then truncated to uint16_t, so for len >= 65497 the total wraps to a small number and the completeness check passes. mac_ok then hashes HDR_LEN + len bytes starting at buf and reads the MAC from buf + HDR_LEN + len, both far beyond rx_len. The MAC check happens after the out-of-bounds read, so no key is needed to trigger it.",
+      "impact": "Anyone who can reach the control channel (a compromised or spoofed cloud endpoint, since this runs inside the TLS session) sends a frame with a huge len field; the device reads up to 64 KB beyond the receive buffer, which on this part means a HardFault and a watchdog reset at best, and disclosure of adjacent memory through timing or the HMAC comparison at worst.",
+      "recommendation": "Validate len before any arithmetic: `if (len > MAX_PAYLOAD || (uint32_t)HDR_LEN + len + MAC_LEN > rx_len) return -2;` and do the sum in uint32_t. Keep the existing len > MAX_PAYLOAD check or fold it into this one. A unit test with len = 0xFFFF and rx_len = 40 should return -2 without calling mac_ok.",
+      "effort": "S",
+      "origin": "first-party",
+      "references": [
+        "CWE-190",
+        "CWE-125"
+      ]
+    },
+    {
+      "id": "FW-002",
+      "title": "payload[len] = 0 writes one byte past the 64-byte payload buffer when len == MAX_PAYLOAD",
+      "rag": "amber",
+      "category": "memory-safety",
+      "confidence": "confirmed",
+      "location": {
+        "file": "source/app/protocol.c",
+        "line": 58
+      },
+      "other_locations": [
+        {
+          "file": "source/app/protocol.c",
+          "line": 54
+        }
+      ],
+      "evidence": "if (len > MAX_PAYLOAD) {\n    return -5;\n}\nmemcpy(payload, buf + HDR_LEN, len);\npayload[len] = 0;",
+      "description": "The bound check allows len == MAX_PAYLOAD (64), after which payload[64] is written, one byte past the 64-byte stack array.",
+      "impact": "An authenticated frame of exactly 64 payload bytes overwrites one byte of an adjacent stack variable. With the current layout that is the status buffer, so the effect is benign today, but any change to locals or compiler flags can turn it into a corrupted return address. Amber because the frame must carry a valid MAC.",
+      "recommendation": "Either reject len >= MAX_PAYLOAD when a terminator is needed, or declare payload[MAX_PAYLOAD + 1]. The terminator is only used for T_SET_NAME, so the simplest safe change is `uint8_t payload[MAX_PAYLOAD + 1];`.",
+      "effort": "S",
+      "origin": "first-party",
+      "references": [
+        "CWE-193",
+        "CWE-787"
+      ]
+    },
+    {
+      "id": "FW-003",
+      "title": "Minimum frame length is spelled out as HDR_LEN + MAC_LEN in two places",
+      "rag": "green",
+      "category": "code-quality",
+      "confidence": "confirmed",
+      "location": {
+        "file": "source/app/protocol.c",
+        "line": 35
+      },
+      "other_locations": [],
+      "evidence": "if (rx_len < HDR_LEN + MAC_LEN) {",
+      "description": "The minimum frame size is recomputed inline rather than named, so the two length checks can drift apart.",
+      "impact": "Maintainability only.",
+      "recommendation": "Add `#define MIN_FRAME_LEN (HDR_LEN + MAC_LEN)` and use it in both checks.",
+      "effort": "S",
+      "origin": "first-party",
+      "references": []
+    }
+  ],
+  "next_steps": [
+    "Fix FW-001 and FW-002 in the parser and add a host-side unit test for the length checks",
+    "Re-run amygdala:review on the fixed branch"
+  ]
+}

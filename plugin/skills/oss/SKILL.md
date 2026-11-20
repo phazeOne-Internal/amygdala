@@ -13,6 +13,23 @@ This is engineering triage, not legal advice. Say so in the report, and route Re
 
 Scripts are plain Python 3 and cross-platform. On Windows use `py` or `python` instead of `python3`. Write outputs with each script's `--out-dir` rather than `>` redirects; Windows PowerShell 5.1 writes UTF-16.
 
+## Before anything else: make sure Python 3 is available
+
+Every bundled script needs Python 3.8 or later. Claude Code does not install it and the plugin cannot check at install time, so check now, before the first script runs:
+
+```bash
+python3 --version        # macOS / Linux
+py -3 --version          # Windows (the Python launcher); fall back to: python --version
+```
+
+If a version 3.8 or newer prints, carry on. If the command is not found, or on Windows it prints nothing and opens the Microsoft Store (that is the Store stub, not Python), stop and tell the user Python 3 is missing. Show the install command for their OS and **ask before running it** (AskUserQuestion if available, otherwise in chat), the same way the skill asks before installing analysers:
+
+- Windows: `winget install --id Python.Python.3.12 -e --accept-source-agreements --accept-package-agreements` (a real python.org build; the Store version is not enough for ScanCode), or download from https://www.python.org/downloads/ and tick "Add python.exe to PATH".
+- macOS: `xcode-select --install` provides `python3`; `brew install python` is the alternative.
+- Debian / Ubuntu: `sudo apt install python3`. Fedora: `sudo dnf install python3`.
+
+Elevation or an interactive prompt may be needed, so suggest `! <command>` when it is. On Windows a fresh install is not on PATH in the current terminal: tell the user to open a new terminal (or restart Claude Code) and run the check again. Never install without a yes, and never install into or modify a toolchain's own Python (PlatformIO, ModusToolbox, ESP-IDF); a toolchain's `python3` on PATH is fine to use.
+
 ## Security rules for this skill
 
 This skill reads a codebase that may contain hostile content and produces reports that are shared widely. These rules have no exceptions:

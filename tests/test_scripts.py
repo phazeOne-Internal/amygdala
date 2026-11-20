@@ -133,6 +133,21 @@ class PluginLayout(unittest.TestCase):
                     continue
                 self.assertNotIn(".claude/skills/", read(p), p)
 
+    def test_every_skill_checks_for_python_first(self):
+        """Claude Code cannot check for Python at plugin install time, so each skill must check
+        before its first script runs, show per-OS install commands, and ask before installing."""
+        for name in os.listdir(SKILLS):
+            text = read(os.path.join(SKILLS, name, "SKILL.md"))
+            check = text.find("## Before anything else: make sure Python 3 is available")
+            self.assertGreater(check, 0, name)
+            first_script = text.find("<skill-dir>/scripts/")
+            self.assertLess(check, first_script, "%s: Python check must come before the first script" % name)
+            section = text[check:check + 2500]
+            for needle in ("python3 --version", "py -3 --version", "winget install --id Python.Python.3.12",
+                           "xcode-select --install", "apt install python3", "ask before running it",
+                           "Never install without a yes", "new terminal"):
+                self.assertIn(needle, section, "%s: %s" % (name, needle))
+
 
 class ReviewScripts(TempDirTest):
     def test_detect_platform(self):

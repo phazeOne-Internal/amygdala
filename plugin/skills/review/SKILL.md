@@ -82,6 +82,8 @@ python3 <skill-dir>/scripts/hotspots.py <repo-root> --exclude <vendored-dir> ...
 
 This greps first-party code for risky patterns: unbounded string functions, hardcoded credentials and keys, disabled TLS verification, weak crypto, asserts used as error handling, empty fault handlers, debug leftovers, dynamic allocation and so on. It also lists the **interrupt handlers** it can identify (by name, or because the function is passed to a registration call such as `NVIC_SetVector`, `IRQ_CONNECT`, `cyhal_*_register_callback`, `gpio_init_callback`, `attachInterrupt`) and reports any blocking or non-ISR-safe call made inside one, directly or through one first-party helper, under its own heading at the top of the concurrency section. Treat those as strong leads: the handler context is established, so the only question left is whether the call is reachable, and the checklist rates `printf`, delays, mutex takes, flash writes and `malloc` in interrupt context as Red. Handlers the scanner cannot see (registered through a struct it does not know, or named unconventionally) still need you to check the registration code by hand.
 
+It also checks **layering** where it can tell the layers apart (directories such as `drivers/`, `hal/`, `bsp/` versus `app/`, `application/`, `services/`, or `drv_*` / `app_*` file names): a driver that includes an application header or calls an application function, and application code that writes peripheral registers directly. If the tree has no such structure it says "layers not inferable" and applies nothing; when you can see the layers yourself, re-run with `--layer lower=<path> --layer upper=<path>`. These are code-quality leads (Green, Amber if the upward call runs in interrupt context or ties the driver to application state), never Red on their own, and the recommendation is a callback or queue plus build-system enforcement so it cannot recur.
+
 **b. Static analysers.** First check what is installed. This installs nothing:
 
 ```bash
@@ -142,7 +144,7 @@ Read the code. Work through the areas in roughly this order, since this is where
 6. **Persistent storage and power** — flash write frequency and wear, atomic config updates, brown-out, sleep/wake.
 7. **Long-running behaviour** — tick/counter wraparound, leaks, heap fragmentation, stack sizing.
 8. **Field readiness and regulatory** — diagnostics, versioning, factory reset, default passwords, update support.
-9. **Code quality and style** — only after the above; it matters, but it rarely ranks above a Red.
+9. **Code quality and style** — only after the above; it matters, but it rarely ranks above a Red. Include architecture here: dependency direction between layers (drivers must not call up into the application), and whether the build enforces it.
 
 For a large codebase (roughly more than 30k lines of first-party code), you may split areas across parallel subagents. Give each one the relevant reference files, the area to cover, the first-party paths, and ask it to return candidate findings in the `findings.json` finding format with evidence. You remain responsible for verifying and rating everything they return.
 

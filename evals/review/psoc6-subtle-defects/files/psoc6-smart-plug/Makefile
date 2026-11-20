@@ -5,7 +5,7 @@ TOOLCHAIN=GCC_ARM
 CONFIG?=Release
 COMPONENTS=FREERTOS LWIP MBEDTLS SECURE_SOCKETS
 DEFINES=CY_RTOS_AWARE MBEDTLS_USER_CONFIG_FILE='"mbedtls_user_config.h"'
-INCLUDES=configs source
+INCLUDES=configs source/app source/drivers
 # Production signing key is held by the release server; path injected by CI.
 SIGN_KEY_FILE=$(RELEASE_SIGNING_KEY)
 APP_VERSION_MAJOR=2

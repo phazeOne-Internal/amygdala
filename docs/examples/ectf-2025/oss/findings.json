@@ -1,0 +1,514 @@
+{
+  "report": {
+    "title": "Open-source licence review",
+    "must_fix_heading": "Must resolve before distribution",
+    "verdict_sub": {
+      "red": "{n} Red issue(s) block distribution until resolved.",
+      "amber": "No Red issues. {n} Amber issue(s) need their obligations met or a recorded decision before distribution.",
+      "green": "No Red or Amber licence issues found in the areas scanned.",
+      "green_tracking": "No open Red or Amber licence issues in the areas scanned."
+    },
+    "categories": [
+      [
+        "strong-copyleft",
+        "Strong copyleft (GPL family)"
+      ],
+      [
+        "network-copyleft",
+        "Network copyleft (AGPL / SSPL)"
+      ],
+      [
+        "weak-copyleft",
+        "Weak copyleft (LGPL / MPL / EPL)"
+      ],
+      [
+        "installation-info",
+        "GPLv3 vs locked boot / signed images"
+      ],
+      [
+        "unlicensed-provenance",
+        "No licence / copied code"
+      ],
+      [
+        "restricted-vendor",
+        "Vendor & non-commercial terms"
+      ],
+      [
+        "license-conflict",
+        "Licence conflicts"
+      ],
+      [
+        "linux-obligations",
+        "Embedded Linux source obligations"
+      ],
+      [
+        "attribution",
+        "Attribution & notices"
+      ],
+      [
+        "sbom-process",
+        "SBOM & compliance process"
+      ]
+    ],
+    "verdict": {
+      "red": "NOT CLEARED FOR DISTRIBUTION",
+      "amber": "CONDITIONAL \u2014 OBLIGATIONS OR DECISIONS OUTSTANDING",
+      "green": "NO BLOCKING LICENCE ISSUES FOUND, SUBJECT TO COVERAGE"
+    },
+    "rag_meaning": {
+      "red": "Blocks distribution until resolved",
+      "amber": "Obligations to meet or decision needed",
+      "green": "Tidy-up"
+    },
+    "legend": {
+      "red": "Blocks distribution until resolved: copyleft reaching proprietary code, GPLv3 vs locked boot, no licence, non-commercial terms, licence conflicts. Needs engineering change or a legal decision.",
+      "amber": "Shippable once obligations are met or a decision is recorded: source offers, notices, modified MPL files, unknown dependency licences.",
+      "green": "Tidy-up: attribution in place, build-only tools, SPDX hygiene."
+    },
+    "disclaimer": "Automated and AI-assisted licence triage. Not legal advice. Red items and all distribution decisions should be confirmed by your open-source compliance owner or legal counsel."
+  },
+  "project": {
+    "name": "2025 eCTF insecure example decoder (MITRE reference design)",
+    "repo_path": "2025-ectf-insecure-example (MITRE, commit 7c26fc2)",
+    "version": "2025 reference design (tools package 2025.01.15; no git metadata in the reviewed copy)",
+    "review_date": "2026-11-20 19:44",
+    "reviewer": "./phazeOne amygdala:oss",
+    "platform": {
+      "summary": "Analog Devices MAX78000 (FTHR_RevA) bare-metal decoder firmware \u00b7 ADI MSDK v2024_02 \u00b7 GNU Arm GCC in a Docker build container \u00b7 host-side Python design and tool packages",
+      "detection_confidence": "high",
+      "notes": "Distribution model assumed for this review: the decoder firmware (decoder/) is the distributed product; design/ and tools/ are host tooling used internally and not distributed. The device is assumed to boot through the eCTF bootloader that only accepts packaged images (treated as locked boot, the riskier option for GPLv3). No linker map or build output was available, so firmware linkage is inferred from decoder/Makefile and decoder/project.mk."
+    },
+    "scope": {
+      "first_party_paths": [
+        "decoder/src/",
+        "decoder/inc/",
+        "decoder/project.mk",
+        "decoder/firmware.ld",
+        "design/",
+        "tools/",
+        "frames/"
+      ],
+      "excluded_paths": [
+        "ADI MSDK v2024_02 (downloaded inside the Docker build at build time; not present in the repository, so not scanned)",
+        "decoder/wolfssl/ (optional crypto example library; not present, gitignored)",
+        "Ubuntu 24.04 toolchain packages (inside the build container; not present)"
+      ],
+      "files_reviewed": 40,
+      "first_party_loc": 4060
+    }
+  },
+  "summary": {
+    "overview": "MITRE's 2025 eCTF insecure example is a small MAX78000 decoder firmware plus host-side Python tooling, released by MITRE under Apache-2.0. In the code that is actually in the repository nothing blocks distribution: there is no GPL, LGPL or AGPL code, and the Maxim startup file that ScanCode marks as 'proprietary' is a permissive MIT-style licence. The open items are about what the repository does not contain: the ADI MSDK is downloaded and linked at build time and was not scanned, there is no third-party notices file or SBOM for the firmware, and the optional wolfSSL crypto example would statically link GPL code into the firmware if anyone turns it on.",
+    "key_risks": [
+      "Turning on the eCTF Crypto Example (CRYPTO_EXAMPLE=1) compiles wolfSSL (GPL-3.0-or-later unless you buy a commercial licence) into the firmware image. That would become a Red: copyleft over the whole image, plus GPLv3 installation information on a locked-boot device.",
+      "The ADI MSDK v2024_02 libraries linked into the firmware are downloaded at build time and were not scanned, so their licences and notices are not confirmed.",
+      "No third-party notices file ships with the firmware, although Apache-2.0 (MITRE code, and probably the MSDK) and the Maxim MIT-style startup licence both require notices to go with binary distributions.",
+      "Every source file says it is 'provided only for educational purposes for the 2025 MITRE eCTF competition'. Anyone reusing the code commercially should record how that statement relates to the Apache-2.0 grant."
+    ],
+    "strengths": [
+      "A single, clear project licence: Apache-2.0 in LICENSE.txt, with MITRE's public-release approval (Case 24-03351-Code).",
+      "Consistent MITRE copyright headers on every first-party source file.",
+      "GPL wolfSSL is kept out of the repository (gitignored), and the crypto example that uses it is off by default.",
+      "Third-party Maxim files keep their original copyright and licence headers intact.",
+      "The build environment is defined in a Dockerfile, so the toolchain and SDK version (MSDK v2024_02) can be identified and audited."
+    ]
+  },
+  "coverage": [
+    {
+      "area": "strong-copyleft",
+      "status": "partial",
+      "notes": "Repository scanned with ScanCode 32.5.0 and license_scan.py: no GPL code found. No linker map exists, so firmware linkage is inferred from the Makefile. The MSDK and the toolchain C runtime (newlib-nano, libgcc) are linked but were not in the repository."
+    },
+    {
+      "area": "network-copyleft",
+      "status": "reviewed",
+      "notes": "No network services. No AGPL or SSPL found in the repository or in the declared Python dependencies. Host tooling is assumed internal."
+    },
+    {
+      "area": "weak-copyleft",
+      "status": "partial",
+      "notes": "Only tqdm (MPL-2.0 AND MIT) in internal host tooling, used unmodified. The MSDK was not scanned. Python dependency licences come from known public metadata; there is no lockfile and nothing installed to check against offline."
+    },
+    {
+      "area": "installation-info",
+      "status": "partial",
+      "notes": "Locked boot assumed (eCTF bootloader). No GPLv3 or LGPLv3 code is compiled into the default build; libgcc's GCC Runtime Library Exception applies. wolfSSL (GPLv3) would trigger this if enabled. MSDK not scanned."
+    },
+    {
+      "area": "unlicensed-provenance",
+      "status": "reviewed",
+      "notes": "Every repository file falls under LICENSE.txt or carries its own Maxim licence header. No snippet or 'copied from' comments found."
+    },
+    {
+      "area": "restricted-vendor",
+      "status": "partial",
+      "notes": "The Maxim startup and Makefile licences were read in full. The MSDK's own terms were not checked because it is not in the repository. Usage-restriction wording in the MITRE headers is raised as a finding."
+    },
+    {
+      "area": "license-conflict",
+      "status": "partial",
+      "notes": "No conflict found among Apache-2.0, the Maxim MIT-style licence, newlib and libgcc (with its exception). The MSDK combination is unconfirmed."
+    },
+    {
+      "area": "linux-obligations",
+      "status": "reviewed",
+      "notes": "Not applicable: bare-metal MCU firmware, no embedded Linux image. The Ubuntu Docker image is a build environment only and is not distributed with the device."
+    },
+    {
+      "area": "attribution",
+      "status": "reviewed",
+      "notes": "No NOTICE or third-party notices file in the repository. A draft THIRD_PARTY_NOTICES.md was generated, and it has gaps for the MSDK, newlib and libgcc texts."
+    },
+    {
+      "area": "sbom-process",
+      "status": "reviewed",
+      "notes": "No SBOM or compliance process found in the repository. A draft CycloneDX 1.5 SBOM was generated from the confirmed component list."
+    }
+  ],
+  "tools": [
+    {
+      "name": "license_scan.py",
+      "status": "ran",
+      "notes": "40 files and 3 components (root, design, tools). It flagged the root as 'proprietary' because of the Maxim files; that is a confirmed false positive. It did not list the pyproject dependencies, which ScanCode did."
+    },
+    {
+      "name": "ScanCode Toolkit 32.5.0",
+      "status": "ran",
+      "notes": "Run with --license --copyright --package --info and exited 0 with no errors. It found Apache-2.0 (LICENSE.txt) and MIT AND LicenseRef-scancode-proprietary-license (decoder/Makefile, decoder/startup_firmware.S; the proprietary part is the Maxim IP-retention clause, a known false-positive pattern), MITRE copyright on 26 source files, 2 PyPI packages and 4 distinct dependencies (loguru, pyserial, tqdm, psutil). It found no licence on the dependencies."
+    },
+    {
+      "name": "Linker map",
+      "status": "not_available",
+      "notes": "No build output in the repository (*.map is gitignored). Linkage is inferred from decoder/Makefile and decoder/project.mk."
+    },
+    {
+      "name": "pip-licenses / Python lockfile",
+      "status": "not_available",
+      "notes": "No lockfile and no installed environment. Dependency licences come from known public metadata and need confirming."
+    },
+    {
+      "name": "make_outputs.py",
+      "status": "ran",
+      "notes": "Draft THIRD_PARTY_NOTICES.md (5 shipped components, 3 without licence text in the repository) and sbom.cdx.json (19 components)."
+    }
+  ],
+  "findings": [
+    {
+      "id": "OSS-001",
+      "title": "Optional wolfSSL crypto example would statically link GPL code into the firmware",
+      "rag": "amber",
+      "category": "strong-copyleft",
+      "confidence": "likely",
+      "location": {
+        "file": "decoder/Makefile",
+        "line": 174
+      },
+      "other_locations": [
+        {
+          "file": "decoder/project.mk",
+          "line": null
+        },
+        {
+          "file": "decoder/inc/simple_crypto.h",
+          "line": 18
+        },
+        {
+          "file": "decoder/src/simple_crypto.c",
+          "line": 14
+        },
+        {
+          "file": "README.md",
+          "line": 13
+        },
+        {
+          "file": ".gitignore",
+          "line": 323
+        }
+      ],
+      "evidence": "ifeq ($(CRYPTO_EXAMPLE), 1)\nVPATH += wolfssl/wolfcrypt/src\n...\n#include \"wolfssl/wolfcrypt/aes.h\"\n# project.mk: CRYPTO_EXAMPLE=0",
+      "description": "The reference design includes an optional 'eCTF Crypto Example' (simple_crypto.c/.h) built on wolfCrypt. It is off by default (CRYPTO_EXAMPLE=0), and wolfSSL is not in the repository: the README tells developers to download it into decoder/wolfssl/, and .gitignore excludes that directory. If it is turned on, the Makefile adds wolfssl/wolfcrypt/src to VPATH, and MSDK auto-search compiles those sources straight into the single statically linked MAX78000 image. wolfSSL is dual-licensed: GPL-3.0-or-later for current releases (GPL-2.0-or-later before 5.6.6), or a commercial licence from wolfSSL Inc.",
+      "impact": "In the default build: no exposure. With the crypto example on under the GPL option, distributing the firmware would mean offering the complete corresponding source of the whole image (MITRE code, MSDK and wolfSSL) under GPL-3.0. On a device that only boots signed or packaged images, GPL-3.0 section 6 also requires the Installation Information needed to install modified firmware. Either of these would make this a Red.",
+      "recommendation": "Decide this now and record it. Either (a) keep CRYPTO_EXAMPLE=0 and enforce it, for example a CI check that fails if decoder/wolfssl/ exists or CRYPTO_EXAMPLE=1 in a release build; or (b) buy a wolfSSL commercial licence before enabling it; or (c) use a permissive crypto library instead, such as Mbed TLS / TF-PSA-Crypto (Apache-2.0), Monocypher (BSD-2-Clause or CC0) or tinycrypt (BSD-3-Clause), or the MAX78000's hardware AES/TRNG drivers from the MSDK.",
+      "effort": "S",
+      "origin": "third-party",
+      "references": [
+        "GPL-3.0 \u00a75(c) whole work",
+        "GPL-3.0 \u00a76 Installation Information (User Products)",
+        "wolfSSL dual licensing (GPL / commercial)"
+      ]
+    },
+    {
+      "id": "OSS-002",
+      "title": "ADI MSDK v2024_02 is linked into the firmware but downloaded at build time and not scanned",
+      "rag": "amber",
+      "category": "restricted-vendor",
+      "confidence": "needs-verification",
+      "location": {
+        "file": "decoder/Dockerfile",
+        "line": 30
+      },
+      "other_locations": [
+        {
+          "file": "decoder/Makefile",
+          "line": 401
+        },
+        {
+          "file": "decoder/Makefile",
+          "line": 409
+        },
+        {
+          "file": "decoder/project.mk",
+          "line": null
+        }
+      ],
+      "evidence": "wget https://github.com/analogdevicesinc/msdk/archive/refs/tags/v2024_02.zip\nENV MAXIM_PATH=/root/msdk-2024_02\n...\ninclude $(LIBS_DIR)/libs.mk",
+      "description": "The firmware links CMSIS device startup/system files, the MAX78000 peripheral drivers (flc, icc, uart, nvic_table, mxc_delay) and the FTHR_RevA board support package (LIB_BOARD and LIB_PERIPHDRIVERS are on by default), all from the Analog Devices MSDK. The Dockerfile fetches the MSDK at build time, so none of it is in the repository and neither scanner could check it. Most MSDK files are expected to be Apache-2.0, with some older Maxim MIT-style headers and Arm's Apache-2.0 CMSIS. Vendor SDKs can also carry use-with-vendor-silicon terms. That condition would be met here (the target is ADI's own MAX78000), but it has not been confirmed.",
+      "impact": "The largest third-party part of the shipped image has unconfirmed licences and attributions. If any linked MSDK file is under a more restrictive or vendor-only licence, that is not known. Apache-2.0 \u00a74 notice obligations for the MSDK are not being met at the moment (see OSS-003).",
+      "recommendation": "Run ScanCode over msdk-2024_02/Libraries (at least CMSIS/Device/Maxim/MAX78000, PeriphDrivers and Boards/MAX78000/FTHR_RevA) together with a linker map from 'make release' (pass it with --map), then update confirmed_components.json with the concluded licences and licence-file paths and regenerate the notices and SBOM. Record any ADI use-restriction text from the MSDK licence files.",
+      "effort": "S",
+      "origin": "third-party",
+      "references": [
+        "Apache-2.0 \u00a74",
+        "ADI MSDK licence files (to be confirmed)"
+      ]
+    },
+    {
+      "id": "OSS-003",
+      "title": "No third-party notices ship with the firmware binary",
+      "rag": "amber",
+      "category": "attribution",
+      "confidence": "confirmed",
+      "location": {
+        "file": "LICENSE.txt",
+        "line": null
+      },
+      "other_locations": [
+        {
+          "file": "decoder/startup_firmware.S",
+          "line": 3
+        },
+        {
+          "file": "README.md",
+          "line": null
+        }
+      ],
+      "evidence": "",
+      "description": "The firmware image (max78000.bin / .elf) combines MITRE Apache-2.0 code, the Maxim MIT-style startup file, the MSDK (probably Apache-2.0) and newlib-nano (BSD-style per-file notices). The repository has no NOTICE file, no THIRD_PARTY_NOTICES file and no documented place where these notices go with the binary. LICENSE.txt covers only the MITRE code.",
+      "impact": "Distributing the binary without these notices does not meet Apache-2.0 \u00a74(a) (give recipients a copy of the licence), the Maxim licence condition (the copyright notice and permission notice must be included in all copies or substantial portions) or newlib's BSD-style attribution conditions. This is easy to fix, but it is an obligation.",
+      "recommendation": "Review and complete the generated draft THIRD_PARTY_NOTICES.md: add the MSDK, newlib and libgcc licence texts it marks as missing, and cut the Maxim entry down to its licence header. Ship it with every firmware release (release bundle, product documentation or a support web page).",
+      "effort": "S",
+      "origin": "first-party",
+      "references": [
+        "Apache-2.0 \u00a74(a), \u00a74(c)",
+        "Maxim Integrated MIT-style licence (notice condition)",
+        "newlib COPYING.NEWLIB"
+      ]
+    },
+    {
+      "id": "OSS-004",
+      "title": "'Educational purposes only' wording in every source header sits beside the Apache-2.0 grant",
+      "rag": "amber",
+      "category": "restricted-vendor",
+      "confidence": "needs-verification",
+      "location": {
+        "file": "decoder/src/decoder.c",
+        "line": 8
+      },
+      "other_locations": [
+        {
+          "file": "decoder/src/host_messaging.c",
+          "line": 8
+        },
+        {
+          "file": "decoder/src/simple_crypto.c",
+          "line": 8
+        },
+        {
+          "file": "decoder/src/simple_flash.c",
+          "line": 8
+        },
+        {
+          "file": "decoder/src/simple_uart.c",
+          "line": 8
+        },
+        {
+          "file": "decoder/inc/",
+          "line": null
+        },
+        {
+          "file": "design/ectf25_design/",
+          "line": null
+        },
+        {
+          "file": "tools/ectf25/",
+          "line": null
+        },
+        {
+          "file": "LICENSE.txt",
+          "line": null
+        }
+      ],
+      "evidence": "This code is being provided only for educational purposes for the 2025 MITRE eCTF competition,\n * and may not meet MITRE standards for quality. Use this code at your own risk!",
+      "description": "All 26 MITRE-authored source files carry this statement and a MITRE copyright line, but no licence identifier. The root LICENSE.txt grants Apache-2.0 with 'Approved for Public Release; Distribution Unlimited', so read in context the statement is most likely a quality and warranty disclaimer, not an extra licence condition. Read on its own, though, 'provided only for educational purposes' can be taken as a field-of-use restriction, and no file states which governs.",
+      "impact": "For the eCTF competition itself: none. For anyone reusing this code in a commercial product: an unresolved question about whether non-educational use is permitted. That needs a recorded position before the code ships outside the competition.",
+      "recommendation": "If you reuse this code commercially, record a position from legal, ideally backed by written confirmation from MITRE that Apache-2.0 governs and the header text is a disclaimer. If you maintain a fork, add 'SPDX-License-Identifier: Apache-2.0' to each first-party file so the grant sits next to the wording.",
+      "effort": "S",
+      "origin": "first-party",
+      "references": [
+        "Apache-2.0 \u00a72 (grant)",
+        "Apache-2.0 \u00a77 (disclaimer of warranty)"
+      ]
+    },
+    {
+      "id": "OSS-005",
+      "title": "No SBOM, and the build pulls the SDK and base image by mutable reference",
+      "rag": "amber",
+      "category": "sbom-process",
+      "confidence": "confirmed",
+      "location": {
+        "file": "decoder/Dockerfile",
+        "line": 5
+      },
+      "other_locations": [
+        {
+          "file": "decoder/Dockerfile",
+          "line": 30
+        },
+        {
+          "file": "design/pyproject.toml",
+          "line": null
+        },
+        {
+          "file": "tools/pyproject.toml",
+          "line": null
+        }
+      ],
+      "evidence": "FROM ubuntu:24.04\nRUN apt-get update && apt-get upgrade -y && apt-get install -y ...\nwget https://github.com/analogdevicesinc/msdk/archive/refs/tags/v2024_02.zip",
+      "description": "There is no SBOM and no compliance process in the repository. The build image tracks the moving ubuntu:24.04 tag and installs unpinned apt packages, including the toolchain that supplies newlib and libgcc. The MSDK zip is fetched with no checksum, and the Python dependencies are unpinned with no lockfile. So the exact third-party content of a given firmware build cannot be reproduced or listed afterwards.",
+      "impact": "Release-by-release notices and SBOMs cannot be shown to be accurate. Under the EU Cyber Resilience Act, a manufacturer placing a product like this on the EU market must keep an SBOM of at least its top-level dependencies.",
+      "recommendation": "Pin the base image by digest and the apt toolchain packages by version, verify the MSDK zip against a recorded SHA-256, and add a lockfile (pip-tools or uv) for the host packages. Regenerate sbom.cdx.json for each release from a linker map and a confirmed component list; the draft produced by this review is a starting point.",
+      "effort": "M",
+      "origin": "first-party",
+      "references": [
+        "EU CRA Annex I Part II (1) SBOM",
+        "CycloneDX 1.5"
+      ]
+    },
+    {
+      "id": "OSS-006",
+      "title": "Maxim startup file flagged 'proprietary' by ScanCode is a permissive MIT-style licence",
+      "rag": "green",
+      "category": "unlicensed-provenance",
+      "confidence": "confirmed",
+      "location": {
+        "file": "decoder/startup_firmware.S",
+        "line": 3
+      },
+      "other_locations": [
+        {
+          "file": "decoder/Makefile",
+          "line": 2
+        }
+      ],
+      "evidence": " * Copyright (C) 2023 Maxim Integrated Products, Inc., All Rights Reserved.\n * Permission is hereby granted, free of charge, ...\n * The mere transfer of this software does not imply any licenses\n * of trade secrets, proprietary technology, copyrights, patents, ...",
+      "description": "ScanCode reports 'MIT AND LicenseRef-scancode-proprietary-license' for both Maxim files. Reading the header confirms it is the MIT permission text plus two extra clauses: Maxim's name may only be used as its Branding Policy allows, and transferring the software grants no other IP. Neither restricts use, modification or redistribution of the code. startup_firmware.S is compiled into the firmware (STARTUPFILE in project.mk) and has been adapted for the eCTF bootloader entry point; the Makefile is build-only. These files are under Maxim's licence, not the repository's Apache-2.0.",
+      "impact": "No distribution blocker. The only obligation is to keep the Maxim copyright and permission notice with the firmware (covered by OSS-003) and not use Maxim's name beyond what its branding policy allows.",
+      "recommendation": "Record the concluded licence (MIT-style with Maxim branding and IP clauses) in the component list, as done in confirmed_components.json, so future scans don't escalate it. Keep the headers intact in any fork.",
+      "effort": "S",
+      "origin": "third-party",
+      "references": [
+        "MIT",
+        "ScanCode known false positive: 'All Rights Reserved' / IP-retention clause in permissive text"
+      ]
+    },
+    {
+      "id": "OSS-007",
+      "title": "Build container toolchain is GPL but build-only; linked runtime is covered by exceptions",
+      "rag": "green",
+      "category": "strong-copyleft",
+      "confidence": "likely",
+      "location": {
+        "file": "decoder/Dockerfile",
+        "line": 15
+      },
+      "other_locations": [],
+      "evidence": "apt-get install -y gdb gdb-multiarch gcc-arm-none-eabi binutils-arm-none-eabi make python3.10 git wget libtool texinfo unzip",
+      "description": "GCC, binutils, gdb, make, libtool and texinfo (GPL family) run only inside the build container and never ship. What reaches the image from the toolchain is libgcc (GPL-3.0-or-later WITH GCC-exception-3.1) and newlib-nano (mostly BSD-style). The exception allows linking libgcc into proprietary firmware, and newlib only needs attribution. The container image is not distributed to device recipients.",
+      "impact": "No copyleft obligation on the firmware from the toolchain, provided the build container itself is not handed to customers or contract manufacturers. If it is, that is distribution of GPL programs, and the source-offer obligations apply.",
+      "recommendation": "No change needed. Add the newlib and libgcc licence texts to the notices (OSS-003). If the Docker image is ever given to third parties, provide the Ubuntu source packages or a written offer.",
+      "effort": "S",
+      "origin": "third-party",
+      "references": [
+        "GCC Runtime Library Exception 3.1",
+        "newlib COPYING.NEWLIB"
+      ]
+    },
+    {
+      "id": "OSS-008",
+      "title": "Host Python dependencies are permissive or file-level copyleft and stay internal",
+      "rag": "green",
+      "category": "weak-copyleft",
+      "confidence": "needs-verification",
+      "location": {
+        "file": "tools/pyproject.toml",
+        "line": null
+      },
+      "other_locations": [
+        {
+          "file": "design/pyproject.toml",
+          "line": null
+        }
+      ],
+      "evidence": "dependencies = [\n    \"loguru\",\n    \"pyserial\",\n    \"tqdm\",\n    \"psutil\"\n]",
+      "description": "The host packages depend on loguru (MIT), pyserial (BSD-3-Clause), tqdm (MPL-2.0 AND MIT) and psutil (BSD-3-Clause), plus setuptools at build time. These licences come from the packages' published metadata. Versions are unpinned and nothing was installed, so they were not checked against the actual dist-info files. In this review design/ and tools/ are internal host tooling, so these dependencies are not distributed.",
+      "impact": "None while the tooling stays internal. If design/ or tools/ is ever given to customers or a factory, tqdm's MPL-2.0 files need source availability for any modifications (none are made), and every package needs its notice.",
+      "recommendation": "Run 'pip-licenses --with-license-file' in the installed venv to confirm, and pin versions in a lockfile (OSS-005). Re-rate if the host tooling becomes a deliverable.",
+      "effort": "S",
+      "origin": "third-party",
+      "references": [
+        "MPL-2.0 \u00a73.2",
+        "MIT",
+        "BSD-3-Clause"
+      ]
+    },
+    {
+      "id": "OSS-009",
+      "title": "First-party files and Python packages don't declare their licence",
+      "rag": "green",
+      "category": "attribution",
+      "confidence": "confirmed",
+      "location": {
+        "file": "design/pyproject.toml",
+        "line": null
+      },
+      "other_locations": [
+        {
+          "file": "tools/pyproject.toml",
+          "line": null
+        },
+        {
+          "file": "decoder/src/decoder.c",
+          "line": 1
+        }
+      ],
+      "evidence": "[project]\nname = \"ectf25_design\"\nversion = \"2025.0+example\"\n# (no license / license-files field)",
+      "description": "None of the 26 MITRE-authored files carries an SPDX-License-Identifier. Neither pyproject.toml declares a licence, so pip-installed metadata for ectf25 and ectf25_design shows no licence. The licence is only established by the root LICENSE.txt.",
+      "impact": "Hygiene only. Scanners and downstream SBOM tools report these packages as having no licence data, and files copied out of the repository lose their licence context.",
+      "recommendation": "Add 'SPDX-License-Identifier: Apache-2.0' to first-party headers, and 'license = \"Apache-2.0\"' plus 'license-files = [\"LICENSE.txt\"]' to both pyproject.toml files.",
+      "effort": "S",
+      "origin": "first-party",
+      "references": [
+        "SPDX specification",
+        "PEP 639"
+      ]
+    }
+  ],
+  "next_steps": [
+    "Build once with 'make release' and keep the linker map; rerun the scan with --map and include msdk-2024_02/Libraries to close OSS-002 and the partial coverage areas.",
+    "Record the wolfSSL decision (keep disabled, commercial licence, or permissive replacement) and enforce it in CI (OSS-001).",
+    "Complete and ship THIRD_PARTY_NOTICES.md with each firmware release (OSS-003).",
+    "Get a legal position on the 'educational purposes only' header wording before any commercial reuse (OSS-004).",
+    "Pin the build inputs and generate an SBOM per release (OSS-005).",
+    "Treat the notices file and SBOM produced here as drafts for compliance review."
+  ]
+}

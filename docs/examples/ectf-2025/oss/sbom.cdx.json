@@ -1,0 +1,678 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "serialNumber": "urn:uuid:7f5348c6-7c7c-4764-9fdd-80af4734bb27",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-11-20T19:47:30+00:00",
+    "tools": {
+      "components": [
+        {
+          "type": "application",
+          "name": "phazeOne amygdala:oss skill"
+        }
+      ]
+    },
+    "component": {
+      "type": "device",
+      "name": "2025 eCTF insecure example decoder (MITRE reference design)",
+      "version": "2025 (tools 2025.01.15)",
+      "supplier": {
+        "name": "The MITRE Corporation"
+      }
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "bom-ref": "eCTF 2025 insecure example decoder firmware (first-party)@2025",
+      "name": "eCTF 2025 insecure example decoder firmware (first-party)",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "distribution",
+          "value": "linked"
+        },
+        {
+          "name": "shipped_in",
+          "value": "mcu-firmware"
+        },
+        {
+          "name": "modified",
+          "value": "false"
+        },
+        {
+          "name": "path",
+          "value": "decoder/src"
+        }
+      ],
+      "version": "2025",
+      "supplier": {
+        "name": "The MITRE Corporation"
+      }
+    },
+    {
+      "type": "library",
+      "bom-ref": "Maxim Integrated MAX78000 startup code (startup_firmware.S)@2023",
+      "name": "Maxim Integrated MAX78000 startup code (startup_firmware.S)",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-Maxim-MIT-style"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "distribution",
+          "value": "linked"
+        },
+        {
+          "name": "shipped_in",
+          "value": "mcu-firmware"
+        },
+        {
+          "name": "modified",
+          "value": "true"
+        },
+        {
+          "name": "path",
+          "value": "decoder/startup_firmware.S"
+        }
+      ],
+      "version": "2023",
+      "supplier": {
+        "name": "Maxim Integrated Products, Inc. (Analog Devices)"
+      }
+    },
+    {
+      "type": "library",
+      "bom-ref": "Maxim Integrated MSDK project Makefile@2023",
+      "name": "Maxim Integrated MSDK project Makefile",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-Maxim-MIT-style"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "distribution",
+          "value": "build-tool"
+        },
+        {
+          "name": "shipped_in",
+          "value": ""
+        },
+        {
+          "name": "modified",
+          "value": "true"
+        },
+        {
+          "name": "path",
+          "value": "decoder/Makefile"
+        }
+      ],
+      "version": "2023",
+      "supplier": {
+        "name": "Maxim Integrated Products, Inc. (Analog Devices)"
+      }
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:github/analogdevicesinc/msdk@v2024_02",
+      "name": "Analog Devices MSDK (CMSIS device files, PeriphDrivers, Board support FTHR_RevA)",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-MSDK-unverified"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "distribution",
+          "value": "linked"
+        },
+        {
+          "name": "shipped_in",
+          "value": "mcu-firmware"
+        },
+        {
+          "name": "modified",
+          "value": "false"
+        },
+        {
+          "name": "path",
+          "value": "(downloaded at build time: /root/msdk-2024_02 in the decoder Docker image)"
+        }
+      ],
+      "version": "v2024_02",
+      "purl": "pkg:github/analogdevicesinc/msdk@v2024_02",
+      "supplier": {
+        "name": "Analog Devices, Inc."
+      }
+    },
+    {
+      "type": "library",
+      "bom-ref": "newlib-nano C library (from Ubuntu gcc-arm-none-eabi / libnewlib-arm-none-eabi)@Ubuntu 24.04 package",
+      "name": "newlib-nano C library (from Ubuntu gcc-arm-none-eabi / libnewlib-arm-none-eabi)",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-newlib-various"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "distribution",
+          "value": "linked"
+        },
+        {
+          "name": "shipped_in",
+          "value": "mcu-firmware"
+        },
+        {
+          "name": "modified",
+          "value": "false"
+        },
+        {
+          "name": "path",
+          "value": "(toolchain, Docker image)"
+        }
+      ],
+      "version": "Ubuntu 24.04 package",
+      "supplier": {
+        "name": "newlib project / Ubuntu"
+      }
+    },
+    {
+      "type": "library",
+      "bom-ref": "libgcc (GCC runtime support)@Ubuntu 24.04 gcc-arm-none-eabi",
+      "name": "libgcc (GCC runtime support)",
+      "licenses": [
+        {
+          "expression": "GPL-3.0-or-later WITH GCC-exception-3.1"
+        }
+      ],
+      "properties": [
+        {
+          "name": "distribution",
+          "value": "linked"
+        },
+        {
+          "name": "shipped_in",
+          "value": "mcu-firmware"
+        },
+        {
+          "name": "modified",
+          "value": "false"
+        },
+        {
+          "name": "path",
+          "value": "(toolchain, Docker image)"
+        }
+      ],
+      "version": "Ubuntu 24.04 gcc-arm-none-eabi",
+      "supplier": {
+        "name": "Free Software Foundation / Ubuntu"
+      }
+    },
+    {
+      "type": "library",
+      "bom-ref": "wolfSSL / wolfCrypt (optional eCTF Crypto Example)@not present",
+      "name": "wolfSSL / wolfCrypt (optional eCTF Crypto Example)",
+      "licenses": [
+        {
+          "license": {
+            "id": "GPL-3.0-or-later"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "distribution",
+          "value": "not-distributed"
+        },
+        {
+          "name": "shipped_in",
+          "value": ""
+        },
+        {
+          "name": "modified",
+          "value": "false"
+        },
+        {
+          "name": "path",
+          "value": "decoder/wolfssl (absent, gitignored)"
+        }
+      ],
+      "version": "not present",
+      "supplier": {
+        "name": "wolfSSL Inc."
+      }
+    },
+    {
+      "type": "library",
+      "bom-ref": "GNU Arm Embedded toolchain (gcc-arm-none-eabi, binutils-arm-none-eabi, gdb, gdb-multiarch)@Ubuntu 24.04 packages",
+      "name": "GNU Arm Embedded toolchain (gcc-arm-none-eabi, binutils-arm-none-eabi, gdb, gdb-multiarch)",
+      "licenses": [
+        {
+          "license": {
+            "id": "GPL-3.0-or-later"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "distribution",
+          "value": "build-tool"
+        },
+        {
+          "name": "shipped_in",
+          "value": ""
+        },
+        {
+          "name": "modified",
+          "value": "false"
+        },
+        {
+          "name": "path",
+          "value": "decoder/Dockerfile"
+        }
+      ],
+      "version": "Ubuntu 24.04 packages",
+      "supplier": {
+        "name": "Free Software Foundation / Ubuntu"
+      }
+    },
+    {
+      "type": "library",
+      "bom-ref": "GNU Make, libtool, texinfo, git, wget, unzip (build container utilities)@Ubuntu 24.04 packages",
+      "name": "GNU Make, libtool, texinfo, git, wget, unzip (build container utilities)",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-Ubuntu-packages-mixed"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "distribution",
+          "value": "build-tool"
+        },
+        {
+          "name": "shipped_in",
+          "value": ""
+        },
+        {
+          "name": "modified",
+          "value": "false"
+        },
+        {
+          "name": "path",
+          "value": "decoder/Dockerfile"
+        }
+      ],
+      "version": "Ubuntu 24.04 packages",
+      "supplier": {
+        "name": "Ubuntu / various"
+      }
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:docker/ubuntu@24.04",
+      "name": "Ubuntu base image",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-Ubuntu-packages-mixed"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "distribution",
+          "value": "build-tool"
+        },
+        {
+          "name": "shipped_in",
+          "value": ""
+        },
+        {
+          "name": "modified",
+          "value": "false"
+        },
+        {
+          "name": "path",
+          "value": "decoder/Dockerfile"
+        }
+      ],
+      "version": "24.04",
+      "purl": "pkg:docker/ubuntu@24.04",
+      "supplier": {
+        "name": "Canonical"
+      }
+    },
+    {
+      "type": "library",
+      "bom-ref": "Python 3.10 (build container)@3.10",
+      "name": "Python 3.10 (build container)",
+      "licenses": [
+        {
+          "license": {
+            "id": "PSF-2.0"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "distribution",
+          "value": "build-tool"
+        },
+        {
+          "name": "shipped_in",
+          "value": ""
+        },
+        {
+          "name": "modified",
+          "value": "false"
+        },
+        {
+          "name": "path",
+          "value": "decoder/Dockerfile"
+        }
+      ],
+      "version": "3.10",
+      "supplier": {
+        "name": "Python Software Foundation"
+      }
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:pypi/ectf25-design@2025.0%2Bexample",
+      "name": "ectf25_design (host design package)",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "distribution",
+          "value": "not-distributed"
+        },
+        {
+          "name": "shipped_in",
+          "value": ""
+        },
+        {
+          "name": "modified",
+          "value": "false"
+        },
+        {
+          "name": "path",
+          "value": "design"
+        }
+      ],
+      "version": "2025.0+example",
+      "purl": "pkg:pypi/ectf25-design@2025.0%2Bexample",
+      "supplier": {
+        "name": "The MITRE Corporation"
+      }
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:pypi/ectf25@2025.01.15",
+      "name": "ectf25 (host tools package)",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "distribution",
+          "value": "not-distributed"
+        },
+        {
+          "name": "shipped_in",
+          "value": ""
+        },
+        {
+          "name": "modified",
+          "value": "false"
+        },
+        {
+          "name": "path",
+          "value": "tools"
+        }
+      ],
+      "version": "2025.01.15",
+      "purl": "pkg:pypi/ectf25@2025.01.15",
+      "supplier": {
+        "name": "The MITRE Corporation"
+      }
+    },
+    {
+      "type": "library",
+      "bom-ref": "Example frame data@2025",
+      "name": "Example frame data",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "distribution",
+          "value": "not-distributed"
+        },
+        {
+          "name": "shipped_in",
+          "value": ""
+        },
+        {
+          "name": "modified",
+          "value": "false"
+        },
+        {
+          "name": "path",
+          "value": "frames"
+        }
+      ],
+      "version": "2025",
+      "supplier": {
+        "name": "The MITRE Corporation"
+      }
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:pypi/loguru",
+      "name": "loguru",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "distribution",
+          "value": "not-distributed"
+        },
+        {
+          "name": "shipped_in",
+          "value": ""
+        },
+        {
+          "name": "modified",
+          "value": "false"
+        },
+        {
+          "name": "path",
+          "value": "design/pyproject.toml; tools/pyproject.toml"
+        }
+      ],
+      "version": "unpinned",
+      "purl": "pkg:pypi/loguru",
+      "supplier": {
+        "name": "Delgan"
+      }
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:pypi/pyserial",
+      "name": "pyserial",
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "distribution",
+          "value": "not-distributed"
+        },
+        {
+          "name": "shipped_in",
+          "value": ""
+        },
+        {
+          "name": "modified",
+          "value": "false"
+        },
+        {
+          "name": "path",
+          "value": "tools/pyproject.toml"
+        }
+      ],
+      "version": "unpinned",
+      "purl": "pkg:pypi/pyserial",
+      "supplier": {
+        "name": "pyserial project"
+      }
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:pypi/tqdm",
+      "name": "tqdm",
+      "licenses": [
+        {
+          "expression": "MPL-2.0 AND MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "distribution",
+          "value": "not-distributed"
+        },
+        {
+          "name": "shipped_in",
+          "value": ""
+        },
+        {
+          "name": "modified",
+          "value": "false"
+        },
+        {
+          "name": "path",
+          "value": "tools/pyproject.toml"
+        }
+      ],
+      "version": "unpinned",
+      "purl": "pkg:pypi/tqdm",
+      "supplier": {
+        "name": "tqdm developers"
+      }
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:pypi/psutil",
+      "name": "psutil",
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "distribution",
+          "value": "not-distributed"
+        },
+        {
+          "name": "shipped_in",
+          "value": ""
+        },
+        {
+          "name": "modified",
+          "value": "false"
+        },
+        {
+          "name": "path",
+          "value": "tools/pyproject.toml"
+        }
+      ],
+      "version": "unpinned",
+      "purl": "pkg:pypi/psutil",
+      "supplier": {
+        "name": "Giampaolo Rodola"
+      }
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:pypi/setuptools",
+      "name": "setuptools (build backend)",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "distribution",
+          "value": "build-tool"
+        },
+        {
+          "name": "shipped_in",
+          "value": ""
+        },
+        {
+          "name": "modified",
+          "value": "false"
+        },
+        {
+          "name": "path",
+          "value": "design/pyproject.toml; tools/pyproject.toml"
+        }
+      ],
+      "version": ">=61.0",
+      "purl": "pkg:pypi/setuptools",
+      "supplier": {
+        "name": "Python Packaging Authority"
+      }
+    }
+  ]
+}

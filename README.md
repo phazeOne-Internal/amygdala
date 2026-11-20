@@ -8,6 +8,15 @@ A Claude Code plugin from ./phazeOne that spots the dangers in embedded / IoT fi
 | `amygdala:oss` | Scans a codebase for open-source licence risk, works out what ships and how it is linked, and produces a RAG licence report, a draft THIRD_PARTY_NOTICES file and a CycloneDX SBOM. |
 | `amygdala:fix` | Works through the findings of a `amygdala:review` report one at a time, Red first, with one commit per finding and a status update in the report. |
 
+## Example reports
+
+See what the output looks like before installing anything. Both skills were run against MITRE's 2025 eCTF insecure example decoder (Apache-2.0):
+
+- [`amygdala:review` report](https://phazeone-internal.github.io/amygdala/examples/ectf-2025/review/report.html): Not ready for field release, 5 Red, 13 Amber, 4 Green.
+- [`amygdala:oss` report](https://phazeone-internal.github.io/amygdala/examples/ectf-2025/oss/report.html): Conditional, obligations or decisions outstanding, 0 Red, 5 Amber, 4 Green.
+
+The developer Markdown, CSV, SBOM and notices files, and how the reports were produced, are in [docs/examples/ectf-2025](docs/examples/ectf-2025/README.md).
+
 ## Requirements
 
 - Claude Code.
@@ -45,6 +54,7 @@ evals/
   review/                          eval cases for amygdala:review (synthetic projects with planted defects, plus the eCTF 2025 insecure example)
   oss/                             eval cases for amygdala:oss
   run.py                           runs the cases through claude plugin eval
+docs/examples/                     example reports (served by GitHub Pages)
 tests/                             script test suite and its two sample findings files
 ```
 

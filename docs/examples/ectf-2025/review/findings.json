@@ -1,0 +1,798 @@
+{
+  "project": {
+    "name": "2025 eCTF insecure example decoder (MITRE reference design)",
+    "repo_path": "2025-ectf-insecure-example (MITRE, commit 7c26fc2)",
+    "version": "2025 eCTF insecure example (reference design snapshot, Apache-2.0)",
+    "review_date": "2026-11-20 19:46",
+    "reviewer": "./phazeOne amygdala:review",
+    "platform": {
+      "summary": "Analog Devices MAX78000 (FTHR_RevA) \u00b7 MSDK v2024_02 \u00b7 bare-metal superloop, no RTOS \u00b7 UART host link at 115200 baud \u00b7 frames relayed from a TCP 'satellite' broadcast by host tooling",
+      "detection_confidence": "high",
+      "notes": "Firmware is linked to run behind the separate eCTF bootloader (bootloader region 0x10000000-0x1000E000, application at 0x1000E000); the bootloader is not in this repository. The wolfSSL crypto example is compiled out (CRYPTO_EXAMPLE=0 in project.mk)."
+    },
+    "scope": {
+      "first_party_paths": [
+        "decoder/src/",
+        "decoder/inc/",
+        "decoder/startup_firmware.S",
+        "decoder/firmware.ld",
+        "decoder/Makefile",
+        "decoder/project.mk",
+        "decoder/Dockerfile",
+        "design/ectf25_design/"
+      ],
+      "excluded_paths": [
+        "tools/ (host test and harness tooling, light review only)",
+        "MSDK v2024_02 (not vendored; fetched at build time in the Dockerfile)",
+        "eCTF bootloader (not in repository)"
+      ],
+      "files_reviewed": 22,
+      "first_party_loc": 1982
+    }
+  },
+  "summary": {
+    "overview": "This is MITRE's deliberately insecure reference decoder for the 2025 eCTF: a MAX78000 firmware that receives subscription updates and broadcast TV frames from a host over UART and returns the frame contents for subscribed channels. As expected for an intentionally insecure example, it is not fit for field release: the UART packet parser lets a single oversized or undersized message corrupt or leak stack memory, and the content-protection model has no cryptography at all, so subscriptions can be forged, expired subscriptions never lapse, and frames are broadcast in cleartext. Robustness gaps (no watchdog, non-atomic flash updates, ignored host ACK failures, printf in an interrupt handler) would cause hangs and lost state in the field.",
+    "key_risks": [
+      "Any UART/broadcast message longer than 100 bytes overwrites the main loop's stack buffer (memory corruption, crash, possible code execution).",
+      "A decode message shorter than 12 bytes makes the decoder stream ~64 KB of RAM beyond its buffer back to the host before faulting.",
+      "Subscription updates are accepted from anyone, for any decoder ID, with no signature or MAC: subscriptions can be forged.",
+      "Frames are cleartext and unauthenticated, and timestamps are ignored: anyone on the broadcast sees every channel, expired subscriptions keep working, and old or forged frames are accepted.",
+      "No watchdog and spin-forever fault handlers: once the decoder faults it stays hung until power-cycled."
+    ],
+    "strengths": [
+      "Wire structures are explicitly packed (#pragma pack) and match the host's struct.pack layouts, so the protocol layout itself is unambiguous.",
+      "The emergency channel (0) cannot be overwritten by a subscription update, and list_channels() is bounded by MAX_CHANNEL_COUNT, so the list response cannot overflow.",
+      "Persistent state lives in a dedicated flash page (second to last page) outside the application image, and a first-boot canary initialises it to a known state.",
+      "The build is containerised (Dockerfile) with the MSDK pinned to the v2024_02 release tag, and -Wall is enabled.",
+      "The wolfSSL crypto example, which uses an all-zero key, is compiled out of the default build."
+    ]
+  },
+  "coverage": [
+    {
+      "area": "memory-safety",
+      "status": "reviewed",
+      "notes": "All first-party C in decoder/src and decoder/inc read line by line; UART input traced from read_header() to every consumer."
+    },
+    {
+      "area": "security",
+      "status": "reviewed",
+      "notes": "Subscription, frame and list paths reviewed together with the host-side encoder and subscription generator in design/."
+    },
+    {
+      "area": "secure-boot-ota",
+      "status": "partial",
+      "notes": "The eCTF bootloader that verifies and installs images is not in this repository; only the application side (linker layout, tools/ectf25/utils/flash.py) was reviewed."
+    },
+    {
+      "area": "robustness",
+      "status": "reviewed",
+      "notes": "Init, error paths, startup fault handlers and flash persistence reviewed."
+    },
+    {
+      "area": "concurrency",
+      "status": "reviewed",
+      "notes": "Bare-metal superloop with one registered interrupt (flash controller); no RTOS."
+    },
+    {
+      "area": "hardware-power",
+      "status": "partial",
+      "notes": "Flash usage reviewed; MSDK flash controller driver internals and power/sleep behaviour not reviewed; no hardware testing performed."
+    },
+    {
+      "area": "dependencies",
+      "status": "partial",
+      "notes": "MSDK version taken from the Dockerfile; OSV.dev lookup skipped (no consent); wolfSSL not present and not compiled in."
+    },
+    {
+      "area": "field-readiness",
+      "status": "reviewed",
+      "notes": "Versioning, diagnostics, reset-reason handling and debug leftovers reviewed."
+    },
+    {
+      "area": "regulatory",
+      "status": "partial",
+      "notes": "Code-evidenced items mapped; process items (disclosure policy, support period, SBOM, provisioning) cannot be shown from code. Engineering guidance, not legal advice; the compliance owner should confirm applicability and dates."
+    },
+    {
+      "area": "code-quality",
+      "status": "reviewed",
+      "notes": "Build flags, string formatting and test/CI presence reviewed. tools/ got a light pass only."
+    }
+  ],
+  "tools": [
+    {
+      "name": "detect_platform.py",
+      "status": "ran",
+      "notes": "MAX78000 / MSDK detected with high confidence; no vendored directories in tree"
+    },
+    {
+      "name": "hotspots.py",
+      "status": "ran",
+      "notes": "14 pattern leads plus 4 absence checks, including 1 printf inside an identified ISR; 10 contributed to findings"
+    },
+    {
+      "name": "cppcheck",
+      "status": "ran",
+      "notes": "Cppcheck 2.22.0; 5 files; 11 leads (unsignedLessThanZero on read_ack() became FW-006; uninitvar on boot flag judged a false positive)"
+    },
+    {
+      "name": "clang-tidy",
+      "status": "skipped",
+      "notes": "Homebrew LLVM 23.1.6 installed, but no compile_commands.json; not generated because that needs an MSDK build (bear -- make), which was out of scope for this run"
+    },
+    {
+      "name": "flawfinder",
+      "status": "ran",
+      "notes": "2.0.20; min level 2; 5 leads (sprintf / memcpy), all with bounded sources; folded into FW-019"
+    },
+    {
+      "name": "semgrep",
+      "status": "ran",
+      "notes": "1.186.0; bundled embedded-c rules, local only, metrics off; 6 leads (ISR printf became FW-007)"
+    },
+    {
+      "name": "OSV.dev dependency lookup",
+      "status": "skipped",
+      "notes": "skipped (no consent): no user was available to approve sending dependency URLs to api.osv.dev; the plan found no machine-readable dependency manifests in any case"
+    }
+  ],
+  "findings": [
+    {
+      "id": "FW-001",
+      "title": "UART packet length (up to 65,535) copied into 100-byte stack buffer without a bounds check",
+      "rag": "red",
+      "category": "memory-safety",
+      "confidence": "confirmed",
+      "location": {
+        "file": "decoder/src/host_messaging.c",
+        "line": 197
+      },
+      "other_locations": [
+        {
+          "file": "decoder/src/host_messaging.c",
+          "line": 38
+        },
+        {
+          "file": "decoder/src/decoder.c",
+          "line": 375
+        },
+        {
+          "file": "decoder/src/decoder.c",
+          "line": 391
+        }
+      ],
+      "evidence": "// decoder.c main()\nuint8_t uart_buf[100];\nresult = read_packet(&cmd, uart_buf, &pkt_len);\n\n// host_messaging.c read_packet()\nif (header.len && buf != NULL) {\n    if (read_bytes(buf, header.len) < 0) {   // header.len is a uint16_t from the wire\n\n// read_bytes()\n((uint8_t *)buf)[i] = result;              // i runs to len-1",
+      "description": "read_packet() takes the 16-bit length straight from the message header and passes it to read_bytes(), which writes that many bytes into the caller's buffer. The only caller passes main()'s 100-byte stack array, and neither function knows or checks the buffer size. Frames reach this path verbatim from the satellite broadcast (tools/ectf25/tv forwards the received bytes unchanged), so the length is controlled by whoever can inject into the broadcast or talk to the UART.",
+      "impact": "Any message with a body over 100 bytes overwrites main()'s other locals, saved registers and the top of the stack (the stack sits at the end of SRAM). The mild outcome is a crash that hangs the decoder until power-cycle (see FW-010); the severe one is attacker-influenced corruption of control data, giving code execution on the decoder and access to everything it holds. One malformed frame in the broadcast could take down every decoder listening.",
+      "recommendation": "Pass the destination capacity into read_packet() and reject (after draining) any header whose length exceeds it, before reading the body:\n\nint read_packet(msg_type_t *cmd, void *buf, size_t cap, uint16_t *len);\n...\nif (header.len > cap) { drain(header.len); return -1; }\n\nAlso check per command that pkt_len equals the expected structure size (FW-002, FW-012). Test: send messages of 0, 99, 100, 101 and 65,535 bytes and confirm the decoder rejects the oversize ones and keeps running.",
+      "effort": "S",
+      "origin": "first-party",
+      "references": [
+        "CWE-121",
+        "CWE-787",
+        "CWE-20",
+        "ETSI EN 303 645 5.13",
+        "EU CRA Annex I"
+      ]
+    },
+    {
+      "id": "FW-002",
+      "title": "frame_size underflows for decode messages shorter than 12 bytes, streaming ~64 KB of RAM to the host",
+      "rag": "red",
+      "category": "memory-safety",
+      "confidence": "confirmed",
+      "location": {
+        "file": "decoder/src/decoder.c",
+        "line": 263
+      },
+      "other_locations": [
+        {
+          "file": "decoder/src/decoder.c",
+          "line": 275
+        }
+      ],
+      "evidence": "uint16_t frame_size;\n// Frame size is the size of the packet minus the size of non-frame elements\nframe_size = pkt_len - (sizeof(new_frame->channel) + sizeof(new_frame->timestamp));\n...\nwrite_packet(DECODE_MSG, new_frame->data, frame_size);",
+      "description": "decode() subtracts the 12-byte header (channel + timestamp) from pkt_len without first checking pkt_len >= 12, and stores the result in a uint16_t. A shorter packet wraps to 65,524-65,535. The value is then used as the length for write_packet(), which reads from new_frame->data (offset 12 into the 100-byte uart_buf). There is also no upper check: any pkt_len from 77 to 100 returns more than the 64-byte FRAME_SIZE, including stale bytes left from earlier messages. Because the channel field is read from stale buffer contents for a short packet, an emergency-channel (0) value left from a previous frame is enough to pass is_subscribed().",
+      "impact": "A short decode message makes the decoder transmit the rest of the stack (other locals, saved registers, previously received message bytes) to the host, then run off the end of SRAM and fault, hanging until power-cycle. Anyone who can inject a frame into the broadcast or reach the UART can crash decoders on demand and read memory they should not see.",
+      "recommendation": "Validate the length before doing arithmetic on it:\n\nconst size_t hdr = sizeof(new_frame->channel) + sizeof(new_frame->timestamp);\nif (pkt_len < hdr || pkt_len > sizeof(frame_packet_t)) { print_error(\"bad frame length\\n\"); return -1; }\nframe_size = pkt_len - hdr;\n\nTest with pkt_len values 0, 11, 12, 76, 77 and 100 on hardware and confirm only 12..76 are accepted.",
+      "effort": "S",
+      "origin": "first-party",
+      "references": [
+        "CWE-191",
+        "CWE-125",
+        "CWE-200",
+        "ETSI EN 303 645 5.13",
+        "EU CRA Annex I"
+      ]
+    },
+    {
+      "id": "FW-003",
+      "title": "Subscription updates accepted without authentication, integrity check or decoder-ID match",
+      "rag": "red",
+      "category": "security",
+      "confidence": "confirmed",
+      "location": {
+        "file": "decoder/src/decoder.c",
+        "line": 216
+      },
+      "other_locations": [
+        {
+          "file": "decoder/src/decoder.c",
+          "line": 427
+        },
+        {
+          "file": "design/ectf25_design/gen_subscription.py",
+          "line": 46
+        },
+        {
+          "file": "decoder/Makefile",
+          "line": 253
+        }
+      ],
+      "evidence": "int update_subscription(pkt_len_t pkt_len, subscription_update_packet_t *update) {\n    if (update->channel == EMERGENCY_CHANNEL) { ... return -1; }\n    for (i = 0; i < MAX_CHANNEL_COUNT; i++) {\n        if (... == update->channel || !...active) {\n            ...start_timestamp = update->start_timestamp;\n            ...end_timestamp = update->end_timestamp;\n\n# gen_subscription.py\nreturn struct.pack(\"<IQQI\", device_id, start, end, channel)",
+      "description": "A subscription update is a plain 24-byte structure (decoder ID, start, end, channel). The host generator packs it without any signature or MAC, and the firmware writes it to flash after checking only that the channel is not 0. The decoder_id field is never compared with the DECODER_ID the Makefile compiles in (the macro is defined but unused), and start <= end is not checked.",
+      "impact": "Anyone with access to the decoder's host interface can grant themselves any channel for any time window, and a subscription issued for one decoder works on every decoder. The core business control of the product, paid channel access, can be bypassed without any secret.",
+      "recommendation": "Make subscriptions verifiable on the device: have the host sign or MAC each update (for example an AEAD or Ed25519 signature keyed per deployment or per decoder, with keys provisioned at build time from global.secrets), verify it on the decoder before parsing the fields, then require decoder_id == DECODER_ID and start <= end. Reject on any failure without touching flash. Test: a valid update applies; one with a modified field, a different decoder ID or no tag is rejected and flash is unchanged.",
+      "effort": "L",
+      "origin": "first-party",
+      "references": [
+        "CWE-306",
+        "CWE-345",
+        "CWE-639",
+        "ETSI EN 303 645 5.5",
+        "ETSI EN 303 645 5.13",
+        "EU CRA Annex I"
+      ]
+    },
+    {
+      "id": "FW-004",
+      "title": "Broadcast frames are cleartext and unauthenticated; the decoder only echoes the payload",
+      "rag": "red",
+      "category": "security",
+      "confidence": "confirmed",
+      "location": {
+        "file": "design/ectf25_design/encoder.py",
+        "line": 57
+      },
+      "other_locations": [
+        {
+          "file": "decoder/src/decoder.c",
+          "line": 271
+        },
+        {
+          "file": "decoder/src/decoder.c",
+          "line": 275
+        }
+      ],
+      "evidence": "# encoder.py\nreturn struct.pack(\"<IQ\", channel, timestamp) + frame\n\n// decoder.c decode()\nif (is_subscribed(channel)) {\n    /* The reference design doesn't need any extra work to decode ... */\n    write_packet(DECODE_MSG, new_frame->data, frame_size);",
+      "description": "The encoder prepends channel and timestamp to the raw frame; nothing is encrypted or authenticated, and the secrets file it loads is unused. The decoder's subscription check only gates whether this particular decoder repeats the frame; the content itself is already readable on the broadcast. There is no check that a frame came from the legitimate uplink.",
+      "impact": "Anyone who receives the broadcast can watch every channel without a decoder or a subscription, and anyone who can inject into the broadcast can make every decoder display content of their choosing, including on the emergency channel that all decoders accept. Content protection, the purpose of the device, is absent.",
+      "recommendation": "Encrypt and authenticate each frame with per-channel keys (an AEAD such as AES-GCM or ChaCha20-Poly1305, with a unique nonce per frame derived from the timestamp), and give each decoder only the keys for the channels it is subscribed to, wrapped so that only that decoder can unwrap them. Verify the tag on the decoder before releasing any plaintext. Test: a tampered or replayed frame is rejected; a frame for an unsubscribed channel cannot be decrypted.",
+      "effort": "L",
+      "origin": "first-party",
+      "references": [
+        "CWE-311",
+        "CWE-345",
+        "ETSI EN 303 645 5.5",
+        "EU CRA Annex I"
+      ]
+    },
+    {
+      "id": "FW-005",
+      "title": "Frame timestamps ignored: subscription windows never expire and old or out-of-order frames are accepted",
+      "rag": "red",
+      "category": "security",
+      "confidence": "confirmed",
+      "location": {
+        "file": "decoder/src/decoder.c",
+        "line": 266
+      },
+      "other_locations": [
+        {
+          "file": "decoder/src/decoder.c",
+          "line": 143
+        }
+      ],
+      "evidence": "// The reference design doesn't use the timestamp, but you may want to in your design\n// timestamp_t timestamp = new_frame->timestamp;\n...\nint is_subscribed(channel_id_t channel) {\n    ...\n    if (...id == channel && ...active) {\n        return 1;",
+      "description": "The frame timestamp is never read. is_subscribed() checks only that a channel slot is active, never that the frame's timestamp lies within [start_timestamp, end_timestamp]. The decoder also keeps no record of the last accepted timestamp, so there is no monotonic check even though the encoder guarantees strictly increasing timestamps. Subscriptions are never deactivated.",
+      "impact": "Once a decoder has ever been subscribed to a channel it decodes that channel forever, so time-limited subscriptions cannot be sold or revoked. Recorded frames can be replayed later, or frames reordered, and the decoder will play them. Once frames are authenticated (FW-004) this becomes the replay gap.",
+      "recommendation": "In decode(), after authenticating the frame: require start <= timestamp <= end for the matching subscription (skip the window for channel 0), and require timestamp > last_timestamp, keeping last_timestamp in RAM (persist it only if replay across reboots matters). Test: frames before start, after end, and with a repeated or decreasing timestamp are all rejected.",
+      "effort": "M",
+      "origin": "first-party",
+      "references": [
+        "CWE-294",
+        "CWE-613",
+        "ETSI EN 303 645 5.5",
+        "EU CRA Annex I"
+      ]
+    },
+    {
+      "id": "FW-006",
+      "title": "read_ack() returns uint8_t, so every 'read_ack() < 0' failure check is dead code",
+      "rag": "amber",
+      "category": "robustness",
+      "confidence": "confirmed",
+      "location": {
+        "file": "decoder/src/host_messaging.c",
+        "line": 63
+      },
+      "other_locations": [
+        {
+          "file": "decoder/src/host_messaging.c",
+          "line": 86
+        },
+        {
+          "file": "decoder/src/host_messaging.c",
+          "line": 115
+        },
+        {
+          "file": "decoder/src/host_messaging.c",
+          "line": 122
+        },
+        {
+          "file": "decoder/src/host_messaging.c",
+          "line": 155
+        },
+        {
+          "file": "decoder/src/host_messaging.c",
+          "line": 162
+        },
+        {
+          "file": "decoder/src/host_messaging.c",
+          "line": 49
+        }
+      ],
+      "evidence": "uint8_t read_ack() {\n    ...\n    if (ack_buf.cmd == ACK_MSG) {\n        return 0;\n    } else {\n        return -1;     // becomes 255\n    }\n}\n...\nif (type != DEBUG_MSG && read_ack() < 0) {   // never true",
+      "description": "read_ack() is declared to return uint8_t, so -1 is returned as 255 and every caller's '< 0' test is always false (cppcheck unsignedLessThanZero, 5 sites). A non-ACK reply from the host is therefore treated as an ACK and the decoder carries on sending. read_ack() also reads only the 4-byte header of whatever arrived and never drains its body, and read_header() stores negative uart_readbyte() error codes into char fields unchecked.",
+      "impact": "Flow control and error reporting on the host link do not work: if the host sends anything other than an ACK (a new command, an error, line noise), the decoder ignores the failure, keeps transmitting, and leaves the unread body in the UART stream, so the next read_packet() parses payload bytes as a header. In the field this shows up as intermittent protocol desynchronisation and lost or garbled frames that are hard to diagnose.",
+      "recommendation": "Return int from read_ack() (and update the prototype), check uart_readbyte() for negative values in read_header(), and on a non-ACK either drain the announced body or resynchronise explicitly. Build with -Wextra -Wsign-compare -Wtype-limits so the compiler flags this class. Test: have a host reply with an error message instead of an ACK mid-transfer and confirm write_packet() returns -1.",
+      "effort": "S",
+      "origin": "first-party",
+      "references": [
+        "CWE-681",
+        "CWE-252",
+        "CWE-570"
+      ]
+    },
+    {
+      "id": "FW-007",
+      "title": "printf called inside the flash controller interrupt handler",
+      "rag": "amber",
+      "category": "concurrency",
+      "confidence": "confirmed",
+      "location": {
+        "file": "decoder/src/simple_flash.c",
+        "line": 39
+      },
+      "other_locations": [
+        {
+          "file": "decoder/src/simple_flash.c",
+          "line": 51
+        }
+      ],
+      "evidence": "void flash_simple_irq(void) {\n    ...\n    if (temp & MXC_F_FLC_INTR_AF) {\n        MXC_FLC0->intr &= ~MXC_F_FLC_INTR_AF;\n        printf(\" -> Interrupt! (Flash access failure)\\n\\n\");\n    }\n}\n...\nMXC_NVIC_SetVector(FLC0_IRQn, flash_simple_irq);",
+      "description": "flash_simple_irq() is registered as the FLC0 interrupt handler and calls printf() when a flash access-failure interrupt fires. printf() is not interrupt-safe: newlib's stdio state is shared with the main loop (which itself uses printf in write_hex()), and the MSDK retargets output to blocking UART writes. Rated Amber rather than the checklist's default Red because this is a bare-metal superloop with no RTOS locks to deadlock on, and the trigger is a flash access failure rather than normal operation; it becomes Red if an RTOS or buffered/locked stdio is introduced.",
+      "impact": "When a flash access fault occurs (for example a write to a protected address, or during a power dip), the ISR spends tens of characters' worth of UART time blocking with interrupts held, can corrupt stdio state if it interrupts a printf in the main loop, and injects raw text into the binary host protocol, which desynchronises the host. The original fault is then harder to diagnose, not easier.",
+      "recommendation": "In the ISR, only clear the flag and set a volatile status variable (for example volatile uint32_t flash_fault_count++); report it from the main loop through print_error(). Have flash_simple_write()/erase return that status so callers can act on it (see FW-008).",
+      "effort": "S",
+      "origin": "first-party",
+      "references": [
+        "CWE-479",
+        "CWE-662"
+      ]
+    },
+    {
+      "id": "FW-008",
+      "title": "Subscription store is erased then rewritten non-atomically with all flash return codes ignored",
+      "rag": "amber",
+      "category": "robustness",
+      "confidence": "confirmed",
+      "location": {
+        "file": "decoder/src/decoder.c",
+        "line": 243
+      },
+      "other_locations": [
+        {
+          "file": "decoder/src/decoder.c",
+          "line": 317
+        },
+        {
+          "file": "decoder/src/decoder.c",
+          "line": 296
+        }
+      ],
+      "evidence": "flash_simple_erase_page(FLASH_STATUS_ADDR);\nflash_simple_write(FLASH_STATUS_ADDR, &decoder_status, sizeof(flash_entry_t));\n// Success message with an empty body\nwrite_packet(SUBSCRIBE_MSG, NULL, 0);",
+      "description": "Every subscription update erases the single status page and then writes the whole structure back. Both return codes are discarded and success is reported to the host regardless. There is no second copy, sequence number or CRC; the only integrity marker is the first-boot canary, which is itself erased in the window.",
+      "impact": "A power loss between erase and write (seconds-scale risk on every subscribe) leaves the page blank, so the next boot treats the device as new and silently deletes every subscription the customer paid for. A failed write is reported to the host as a success, so the host and decoder disagree about subscriptions until the next reboot, when RAM and flash diverge.",
+      "recommendation": "Use two pages (A/B) with a sequence number and CRC: write the new record to the inactive page, verify it, then mark it current; at boot load the newest valid copy. Check every flash return code and report failure to the host with print_error(). Test by cutting power at random points during repeated subscribe operations and confirming the previous or new state always survives.",
+      "effort": "M",
+      "origin": "first-party",
+      "references": [
+        "CWE-252",
+        "CWE-662",
+        "ETSI EN 303 645 5.9"
+      ]
+    },
+    {
+      "id": "FW-009",
+      "title": "Flash page erased on every subscription message with no rate limit or change check",
+      "rag": "amber",
+      "category": "hardware-power",
+      "confidence": "likely",
+      "location": {
+        "file": "decoder/src/decoder.c",
+        "line": 243
+      },
+      "evidence": "flash_simple_erase_page(FLASH_STATUS_ADDR);\nflash_simple_write(FLASH_STATUS_ADDR, &decoder_status, sizeof(flash_entry_t));",
+      "description": "Each accepted subscription update, including one identical to what is already stored, erases and rewrites the same flash page. Because updates are unauthenticated (FW-003), the host side can issue them as fast as the UART allows. On-chip flash is rated for a finite number of erase cycles per page (check the MAX78000 data sheet for the exact figure; it is in the order of ten thousand).",
+      "impact": "A misbehaving or malicious host loop can wear out the status page within hours of continuous updates, after which subscriptions can no longer be stored reliably and the decoder may lose its configuration on every boot. Normal use is unlikely to reach the limit, which is why this is Amber.",
+      "recommendation": "Skip the write when the record is unchanged, rate-limit updates, and spread writes across several pages with the A/B scheme from FW-008 (a simple log-structured record with a sequence number also levels wear).",
+      "effort": "S",
+      "origin": "first-party",
+      "references": [
+        "CWE-400",
+        "CWE-1246"
+      ]
+    },
+    {
+      "id": "FW-010",
+      "title": "No watchdog, and fault handlers and init failure spin forever",
+      "rag": "amber",
+      "category": "robustness",
+      "confidence": "likely",
+      "location": {
+        "file": "decoder/src/decoder.c",
+        "line": 326
+      },
+      "other_locations": [
+        {
+          "file": "decoder/startup_firmware.S",
+          "line": 301
+        },
+        {
+          "file": "decoder/startup_firmware.S",
+          "line": 306
+        }
+      ],
+      "evidence": "// decoder.c init()\nif (ret < 0) {\n    STATUS_LED_ERROR();\n    // if uart fails to initialize, do not continue to execute\n    while (1);\n}\n\n// startup_firmware.S\n.weak \\handler_name\n\\handler_name :\n    b    .\n...\ndef_irq_handler HardFault_Handler",
+      "description": "No watchdog timer is configured anywhere in first-party code. HardFault, BusFault, MemManage and UsageFault are weak 'b .' loops in the startup file (unless the MSDK links a stronger definition; confirm in the build map), and a UART init failure parks the CPU in while(1). Nothing records why the device stopped.",
+      "impact": "Any fault, including the ones FW-001 and FW-002 make trivially reachable, leaves the decoder hung with a frozen picture until someone power-cycles it, and nobody can tell afterwards what happened. For a set-top style device this is a support call per incident.",
+      "recommendation": "Enable the MAX78000 watchdog (MXC_WDT) early in init(), feed it from the main loop only after a full command has been handled, and implement fault handlers that save the fault registers and PC to a .noinit RAM record before calling NVIC_SystemReset(). Replace while(1) on init failure with a logged reset after a back-off.",
+      "effort": "M",
+      "origin": "first-party",
+      "references": [
+        "CWE-835",
+        "CWE-703",
+        "ETSI EN 303 645 5.9"
+      ]
+    },
+    {
+      "id": "FW-011",
+      "title": "Obfuscated embedded secret (boot reference flag) is deobfuscated and sent to any host on every List command",
+      "rag": "amber",
+      "category": "security",
+      "confidence": "confirmed",
+      "location": {
+        "file": "decoder/src/decoder.c",
+        "line": 161
+      },
+      "other_locations": [
+        {
+          "file": "decoder/src/decoder.c",
+          "line": 131
+        },
+        {
+          "file": "decoder/src/decoder.c",
+          "line": 414
+        }
+      ],
+      "evidence": "// TODO: remove this from your final design\ntypedef uint32_t aErjfkdfru;const aErjfkdfru aseiFuengleR[]={0x1f\u2026 [redacted]};...\n\nvoid boot_flag(void) {\n    ...\n    sprintf(output_buf, \"Boot Reference Flag: %s\\n\", flag);\n    print_debug(output_buf);\n}\n...\ncase LIST_MSG:\n    boot_flag();",
+      "description": "A secret is stored in the image as two obfuscated constant arrays, recovered at run time and printed as a debug message whenever the host sends a List command. The source marks it as a reference-design leftover to remove. Obfuscation is not protection: the value is in every image and is handed to any host that asks.",
+      "impact": "Any secret handled this way is exposed to whoever can send a List command or read the firmware image. In the eCTF this is the intended boot check; in a product it is the pattern by which keys leak, and it should not survive into a release build.",
+      "recommendation": "Remove boot_flag() and the obfuscated arrays from release builds (or guard them with a debug-only build flag that the release target cannot set). Keep real secrets out of source entirely; provision them per device and keep them in protected storage.",
+      "effort": "S",
+      "origin": "first-party",
+      "references": [
+        "CWE-798",
+        "CWE-489",
+        "CWE-200",
+        "ETSI EN 303 645 5.4",
+        "ETSI EN 303 645 5.6"
+      ]
+    },
+    {
+      "id": "FW-012",
+      "title": "Subscription packet length never checked against the 24-byte structure",
+      "rag": "amber",
+      "category": "memory-safety",
+      "confidence": "confirmed",
+      "location": {
+        "file": "decoder/src/decoder.c",
+        "line": 216
+      },
+      "other_locations": [
+        {
+          "file": "decoder/src/decoder.c",
+          "line": 427
+        }
+      ],
+      "evidence": "int update_subscription(pkt_len_t pkt_len, subscription_update_packet_t *update) {\n    // pkt_len is never used\n...\nupdate_subscription(pkt_len, (subscription_update_packet_t *)uart_buf);",
+      "description": "update_subscription() receives pkt_len but never uses it. A short subscribe message is interpreted using whatever bytes earlier messages left in uart_buf, and a long one is silently accepted (the long case also overflows the buffer, FW-001).",
+      "impact": "A truncated subscribe message from the host (line noise, a host bug) installs a subscription built from stale frame data, with a random channel or time window, and persists it to flash. The reads stay inside uart_buf, so this is a correctness and integrity bug rather than a memory-disclosure one.",
+      "recommendation": "Reject the message unless pkt_len == sizeof(subscription_update_packet_t) (or the authenticated message size once FW-003 is fixed), and clear uart_buf between messages. Apply the same exact-size rule to every command handler.",
+      "effort": "S",
+      "origin": "first-party",
+      "references": [
+        "CWE-130",
+        "CWE-20",
+        "ETSI EN 303 645 5.13"
+      ]
+    },
+    {
+      "id": "FW-013",
+      "title": "Secure boot and authenticity of firmware updates not evidenced in this repository",
+      "rag": "amber",
+      "category": "secure-boot-ota",
+      "confidence": "needs-verification",
+      "location": {
+        "file": "decoder/firmware.ld",
+        "line": 4
+      },
+      "other_locations": [
+        {
+          "file": "tools/ectf25/utils/flash.py",
+          "line": 58
+        }
+      ],
+      "evidence": "BOOTLOADER  (rx) : ORIGIN = 0x10000000, LENGTH = 0x0000E000 /* Bootloader flash */\nFLASH       (rx) : ORIGIN = 0x1000E000, LENGTH = 0x00038000 /* Location of team firmware */",
+      "description": "The application is linked to run behind a separate bootloader that is not part of this repository. The build produces a raw .bin with no signing step, and the host update tool streams that image to the bootloader in blocks. Whether the bootloader verifies a signature, prevents rollback or protects itself cannot be judged from here.",
+      "impact": "If the bootloader accepts unsigned images, anyone with UART access can replace the decoder firmware, which defeats every other control in this report. If it has no fallback, an interrupted update bricks the unit.",
+      "recommendation": "Obtain and review the bootloader, or document its guarantees. For a product: sign release images in the build, verify the signature in the bootloader before boot and before install, enforce a monotonic version for anti-rollback, and keep a fallback image. This becomes Red if the bootloader is found to accept unsigned images.",
+      "effort": "L",
+      "origin": "first-party",
+      "references": [
+        "CWE-494",
+        "CWE-345",
+        "ETSI EN 303 645 5.3",
+        "ETSI EN 303 645 5.7",
+        "EU CRA Annex I"
+      ]
+    },
+    {
+      "id": "FW-014",
+      "title": "Debug port lock and flash read-out protection not evidenced",
+      "rag": "amber",
+      "category": "security",
+      "confidence": "needs-verification",
+      "location": {
+        "file": "decoder/src/decoder.c",
+        "line": 289
+      },
+      "evidence": "",
+      "description": "Nothing in the firmware or build disables SWD or enables read-out protection, and subscription state (and any future keys) is stored in plain on-chip flash. On the MAX78000 this is normally done in the bootloader or at manufacturing, which is outside this repository.",
+      "impact": "With the debug port open, anyone with physical access can read the image and its flash state, extract keys once they exist (FW-003/FW-004 fixes), or rewrite subscriptions directly.",
+      "recommendation": "Confirm the production flow locks SWD and enables flash protection on the MAX78000, and record it in the provisioning procedure. Keep key material in the device's protected storage rather than in the application image.",
+      "effort": "M",
+      "origin": "first-party",
+      "references": [
+        "CWE-1191",
+        "ETSI EN 303 645 5.4",
+        "ETSI EN 303 645 5.6",
+        "EU CRA Annex I"
+      ]
+    },
+    {
+      "id": "FW-015",
+      "title": "Build environment fetches MSDK and packages without checksum or version pinning; no SBOM",
+      "rag": "amber",
+      "category": "dependencies",
+      "confidence": "confirmed",
+      "location": {
+        "file": "decoder/Dockerfile",
+        "line": 30
+      },
+      "other_locations": [
+        {
+          "file": "decoder/Dockerfile",
+          "line": 5
+        },
+        {
+          "file": "decoder/Dockerfile",
+          "line": 15
+        }
+      ],
+      "evidence": "FROM ubuntu:24.04\nRUN apt-get update && apt-get upgrade -y && apt-get install -y \\\n    gcc-arm-none-eabi ...\n    wget https://github.com/analogdevicesinc/msdk/archive/refs/tags/v2024_02.zip && \\",
+      "description": "The MSDK is pinned to a release tag but downloaded without verifying a checksum, the base image is a floating tag, and the compiler and all apt packages float with 'apt-get upgrade'. No SBOM is produced. MSDK v2024_02 is from early 2024; check ADI's release notes for later fixes to the drivers used (UART, FLC).",
+      "impact": "Two builds of the same commit can use different compilers and SDK content, so a field issue may not be reproducible, and a tampered download would go unnoticed. Regulators under the CRA will expect an SBOM.",
+      "recommendation": "Pin the base image by digest, pin gcc-arm-none-eabi and other packages to versions, verify the MSDK zip with a sha256sum, and generate an SBOM (for example with syft) as part of the release build.",
+      "effort": "S",
+      "origin": "first-party",
+      "references": [
+        "CWE-494",
+        "CWE-1104",
+        "EU CRA Annex I Part II"
+      ]
+    },
+    {
+      "id": "FW-016",
+      "title": "No firmware version, reset-reason reporting or crash record",
+      "rag": "amber",
+      "category": "field-readiness",
+      "confidence": "confirmed",
+      "location": {
+        "file": "decoder/src/decoder.c",
+        "line": 373
+      },
+      "evidence": "",
+      "description": "The image embeds no version or build ID and no command returns one; the reset reason is never read; there is no crash record across reboot (see FW-010). The hotspot scan found no version definition, reset-reason or fault-handler code in first-party sources.",
+      "impact": "When decoders misbehave in the field, support cannot tell which firmware they run or why they rebooted, so fixes cannot be targeted or confirmed.",
+      "recommendation": "Embed a version string and git hash at build time, expose them through a host command, read and report the MAX78000 reset cause at boot, and add the .noinit crash record from FW-010.",
+      "effort": "S",
+      "origin": "first-party",
+      "references": [
+        "ETSI EN 303 645 5.10",
+        "NIST IR 8425",
+        "EU CRA Annex I"
+      ]
+    },
+    {
+      "id": "FW-017",
+      "title": "Regulatory process items not evidenced: disclosure policy, support period, SBOM, provisioning",
+      "rag": "amber",
+      "category": "regulatory",
+      "confidence": "needs-verification",
+      "location": {
+        "file": "README.md",
+        "line": null
+      },
+      "evidence": "",
+      "description": "The repository contains no SECURITY.md or vulnerability disclosure contact, no stated security support period, no SBOM step and no per-device provisioning procedure. These are required by the EU CRA, UK PSTI and ETSI EN 303 645 for consumer connected products. This is engineering guidance, not legal advice; the compliance owner should confirm which regimes apply to the product and their current dates.",
+      "impact": "Without them the product cannot be placed on the EU or UK market once those obligations apply, regardless of code quality.",
+      "recommendation": "Publish a vulnerability disclosure policy and contact, state the support period, add SBOM generation to the release build (FW-015), and document per-device key provisioning and debug lock at manufacturing (FW-014). Close each item with a link to the evidence.",
+      "effort": "M",
+      "origin": "first-party",
+      "references": [
+        "UK PSTI",
+        "ETSI EN 303 645 5.2",
+        "EU CRA Annex I Part II"
+      ]
+    },
+    {
+      "id": "FW-018",
+      "title": "No unit tests for the packet parser and only -Wall in the build",
+      "rag": "amber",
+      "category": "code-quality",
+      "confidence": "confirmed",
+      "location": {
+        "file": "decoder/Makefile",
+        "line": 252
+      },
+      "evidence": "PROJ_CFLAGS += -Wall # Enable warnings",
+      "description": "The UART parser and command handlers have no host-side unit or fuzz tests, and the build does not use -Wextra, -Wsign-compare or -Wconversion, which would have flagged FW-002 and FW-006. The tools/ testers exercise the happy path through hardware only.",
+      "impact": "Length and signedness defects like FW-001, FW-002 and FW-006 go unnoticed until they fail in the field.",
+      "recommendation": "Compile host_messaging.c and the decode/subscribe handlers on the host against a fake UART and fuzz read_packet() with libFuzzer or AFL; add -Wextra -Wconversion -Wsign-compare and run cppcheck/semgrep in CI.",
+      "effort": "M",
+      "origin": "first-party",
+      "references": [
+        "CWE-1164"
+      ]
+    },
+    {
+      "id": "FW-019",
+      "title": "sprintf used for all formatted output instead of snprintf",
+      "rag": "green",
+      "category": "code-quality",
+      "confidence": "confirmed",
+      "location": {
+        "file": "decoder/src/decoder.c",
+        "line": 279
+      },
+      "other_locations": [
+        {
+          "file": "decoder/src/decoder.c",
+          "line": 169
+        },
+        {
+          "file": "decoder/src/decoder.c",
+          "line": 364
+        },
+        {
+          "file": "decoder/src/decoder.c",
+          "line": 433
+        }
+      ],
+      "evidence": "char output_buf[128] = {0};\nsprintf(output_buf, \"Receiving unsubscribed channel data.  %u\\n\", channel);",
+      "description": "Every sprintf currently formats a bounded value (a 32-bit integer, a character, a 27-character string) into a 128-byte buffer, so none of the flawfinder/semgrep leads can overflow today. The pattern is fragile once someone adds a longer field.",
+      "impact": "No field impact today; a future edit could introduce an overflow.",
+      "recommendation": "Use snprintf(output_buf, sizeof output_buf, ...) throughout.",
+      "effort": "S",
+      "origin": "first-party",
+      "references": [
+        "CWE-120"
+      ]
+    },
+    {
+      "id": "FW-020",
+      "title": "Crypto example (compiled out) uses an all-zero AES key, raw ECB blocks and MD5",
+      "rag": "green",
+      "category": "security",
+      "confidence": "confirmed",
+      "location": {
+        "file": "decoder/src/simple_crypto.c",
+        "line": 51
+      },
+      "other_locations": [
+        {
+          "file": "decoder/src/decoder.c",
+          "line": 348
+        },
+        {
+          "file": "decoder/src/simple_crypto.c",
+          "line": 105
+        },
+        {
+          "file": "decoder/project.mk",
+          "line": 38
+        }
+      ],
+      "evidence": "// decoder.c\nbzero(key, BLOCK_SIZE);\nencrypt_sym((uint8_t*)data, BLOCK_SIZE, key, ciphertext);\n\n// simple_crypto.c\nresult = wc_AesEncryptDirect(&ctx, ciphertext + i, plaintext + i);   // per-block ECB\nreturn wc_Md5Hash((uint8_t *)data, len, hash_out);",
+      "description": "The optional wolfSSL example encrypts each 16-byte block independently (ECB), with no IV or authentication, demonstrates it with an all-zero key, and offers MD5 as the hash. It is disabled in the default build (CRYPTO_EXAMPLE=0), which is why this is Green.",
+      "impact": "None in the shipped build. If a team enables it as the basis of FW-004's fix, frames would leak patterns and be forgeable, which would be Red.",
+      "recommendation": "Do not build on this example: use an AEAD mode (AES-GCM or ChaCha20-Poly1305) with unique nonces, SHA-256 or better, and provisioned keys.",
+      "effort": "S",
+      "origin": "first-party",
+      "references": [
+        "CWE-327",
+        "CWE-328",
+        "CWE-1204"
+      ]
+    },
+    {
+      "id": "FW-021",
+      "title": "First-boot initialisation writes uninitialised channel IDs to flash",
+      "rag": "green",
+      "category": "code-quality",
+      "confidence": "confirmed",
+      "location": {
+        "file": "decoder/src/decoder.c",
+        "line": 306
+      },
+      "evidence": "channel_status_t subscription[MAX_CHANNEL_COUNT];\nfor (int i = 0; i < MAX_CHANNEL_COUNT; i++){\n    subscription[i].start_timestamp = DEFAULT_CHANNEL_TIMESTAMP;\n    subscription[i].end_timestamp = DEFAULT_CHANNEL_TIMESTAMP;\n    subscription[i].active = false;\n}",
+      "description": "The id field (and struct padding) of each default slot is never set, so stack garbage is persisted to flash. Every reader also checks active, so the garbage is never acted on today.",
+      "impact": "No current field impact; makes flash contents non-deterministic and could matter if a future change reads id without active.",
+      "recommendation": "Zero the array first (memset or = {0}) before setting the defaults.",
+      "effort": "S",
+      "origin": "first-party",
+      "references": [
+        "CWE-457"
+      ]
+    },
+    {
+      "id": "FW-022",
+      "title": "Host secrets generator logs the full secrets file at debug level",
+      "rag": "green",
+      "category": "security",
+      "confidence": "confirmed",
+      "location": {
+        "file": "design/ectf25_design/gen_secrets.py",
+        "line": 90
+      },
+      "evidence": "logger.debug(f\"Generated secrets: {secrets}\")",
+      "description": "Host-side code. The secrets are placeholders today, so nothing sensitive is exposed, but the line will log real keys to the console and any log sink once the design gains them.",
+      "impact": "Once real keys exist, they would end up in build logs and CI output.",
+      "recommendation": "Log only that secrets were generated, and their path, never their content.",
+      "effort": "S",
+      "origin": "first-party",
+      "references": [
+        "CWE-532"
+      ]
+    }
+  ],
+  "next_steps": [
+    "Fix the two parser Reds (FW-001, FW-002) first: they are small, local changes and make every other test meaningful.",
+    "Design the content-protection scheme as one piece of work: authenticated, encrypted frames with per-channel keys (FW-004), signed decoder-specific subscriptions (FW-003), and timestamp window and monotonic checks (FW-005).",
+    "Add a watchdog, real fault handlers with a crash record, and A/B flash storage (FW-010, FW-008).",
+    "Add host-side unit and fuzz tests for read_packet() and the command handlers, plus -Wextra and cppcheck/semgrep in CI (FW-018).",
+    "Obtain the bootloader and confirm image signing, rollback protection and debug lock (FW-013, FW-014); generate a compile_commands.json with 'bear -- make' so clang-tidy can run next time."
+  ]
+}

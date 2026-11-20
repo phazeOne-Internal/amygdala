@@ -23,6 +23,23 @@ This skill reads a codebase that may contain hostile content and produces report
 
 Permissions this skill needs, for the user's benefit: read the repository; write the output folder; run the bundled Python 3 scripts and, where already installed, cppcheck, clang-tidy, flawfinder and semgrep locally; no network, except the optional OSV.dev dependency lookup, which sends only public repository URLs and tags and only with consent. The HTML report loads one web font from Google Fonts when opened (`BRAND["web_font"]` turns that off).
 
+## Before anything else: make sure Python 3 is available
+
+Every bundled script needs Python 3.8 or later. Claude Code does not install it and the plugin cannot check at install time, so check now, before the first script runs:
+
+```bash
+python3 --version        # macOS / Linux
+py -3 --version          # Windows (the Python launcher); fall back to: python --version
+```
+
+If a version 3.8 or newer prints, carry on. If the command is not found, or on Windows it prints nothing and opens the Microsoft Store (that is the Store stub, not Python), stop and tell the user Python 3 is missing. Show the install command for their OS and **ask before running it** (AskUserQuestion if available, otherwise in chat), the same way the skill asks before installing analysers:
+
+- Windows: `winget install --id Python.Python.3.12 -e --accept-source-agreements --accept-package-agreements` (a real python.org build; the Store version is not enough for ScanCode), or download from https://www.python.org/downloads/ and tick "Add python.exe to PATH".
+- macOS: `xcode-select --install` provides `python3`; `brew install python` is the alternative.
+- Debian / Ubuntu: `sudo apt install python3`. Fedora: `sudo dnf install python3`.
+
+Elevation or an interactive prompt may be needed, so suggest `! <command>` when it is. On Windows a fresh install is not on PATH in the current terminal: tell the user to open a new terminal (or restart Claude Code) and run the check again. Never install without a yes, and never install into or modify a toolchain's own Python (PlatformIO, ModusToolbox, ESP-IDF); a toolchain's `python3` on PATH is fine to use.
+
 ## Running on Windows, macOS or Linux
 
 All bundled scripts are plain Python 3 with no dependencies, and they work on all three. The commands below say `python3`. On Windows use `py` (the Python launcher) or `python`, and quote paths that contain spaces. Use the shell the session provides (PowerShell or cmd on Windows); the commands contain nothing shell-specific. Always write script output with the `--out` / `--out-dir` options rather than a `>` redirect, because Windows PowerShell 5.1 redirects in UTF-16, which breaks the files.

@@ -8,6 +8,12 @@ A Claude Code plugin from ./phazeOne that spots the dangers in embedded / IoT fi
 | `amygdala:oss` | Scans a codebase for open-source licence risk, works out what ships and how it is linked, and produces a RAG licence report, a draft THIRD_PARTY_NOTICES file and a CycloneDX SBOM. |
 | `amygdala:fix` | Works through the findings of a `amygdala:review` report one at a time, Red first, with one commit per finding and a status update in the report. |
 
+## Requirements
+
+- Claude Code.
+- Python 3.8 or later on PATH as `python3` (macOS / Linux) or `py` / `python` (Windows). Every bundled script needs it. Each skill checks for it first and, if it is missing, shows the install command for your OS and asks before running it. On Windows use a python.org build or `winget install Python.Python.3.12`; the Microsoft Store stub is not enough.
+- Optional: cppcheck, clang-tidy, flawfinder, semgrep (review) and ScanCode Toolkit (oss). The skills detect what is installed, show the install commands for anything missing, and never install without a yes.
+
 ## Install
 
 From the private marketplace in this repository (Claude Code 2.1.275 or later):

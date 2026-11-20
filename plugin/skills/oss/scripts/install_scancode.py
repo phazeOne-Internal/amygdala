@@ -36,6 +36,14 @@ SUPPORTED = ("3.12", "3.11", "3.13", "3.10")   # preferred order; the newest Pyt
 # Known breakage: pluggy >= 1.6 makes ScanCode 32.x fail at start-up ("did not find any 'pre_scan' hooks").
 PLUGGY_PIN = "pluggy==1.5.0"
 RELEASES = "https://github.com/aboutcode-org/scancode-toolkit/releases"
+OS = {"Windows": "windows", "Darwin": "macos"}.get(platform.system(), "linux")
+ARCH = {"ARM64": "arm64", "AARCH64": "arm64", "AMD64": "x64", "X86_64": "x64"}.get(platform.machine().upper(), platform.machine().lower() or "unknown")
+UNAVAILABLE = {("windows", "arm64"): 'ScanCode cannot be pip-installed on Windows on ARM: its pyicu dependency needs the ICU C library and pkg-config, which pip cannot build there. Run the licence review under WSL (`wsl --install`, then `pipx install scancode-toolkit` inside it) or on an x64 machine; the bundled scanner still runs here and the report records the gap.'}
+
+
+def unsupported_platform():
+    """Reason the install is known to fail on this OS/architecture, or None."""
+    return UNAVAILABLE.get((OS, ARCH))
 
 
 def base_python():
@@ -176,6 +184,11 @@ def main():
         if not works:
             sys.exit(1)
         return
+    reason = unsupported_platform()
+    if reason:
+        # Say so before running anything: on this platform the pip build fails after several minutes.
+        print(json.dumps({"status": "unavailable_on_this_platform", "os": OS, "arch": ARCH, "reason": reason}, indent=2))
+        sys.exit(0 if args.dry_run else 1)
     steps = plan()
     prereqs = prerequisites()
     info = {"os": platform.system(), "python": sys.version.split()[0],

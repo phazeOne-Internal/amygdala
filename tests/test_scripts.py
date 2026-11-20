@@ -345,6 +345,30 @@ class OssScripts(TempDirTest):
         self.assertIn(d["os"], ("macos", "linux", "windows"))
         self.assertIn("install_commands", d["scancode"])
 
+    def test_scancode_unavailable_on_windows_arm(self):
+        """Seen on the Windows VM test: pip cannot build pyicu on Windows ARM64. Both the checker and the installer
+        must say so up front instead of running a doomed install."""
+        import importlib.util
+        def load_module(name):
+            spec = importlib.util.spec_from_file_location(name, os.path.join(OSS, name + ".py"))
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return mod
+        ls = load_module("license_scan")
+        ls.OS, ls.ARCH = "windows", "arm64"
+        ls.find_scancode = lambda: None
+        d = ls.check()
+        self.assertTrue(d["scancode"]["unavailable_on_this_platform"])
+        self.assertEqual(d["scancode"]["install_commands"], [])
+        self.assertIn("WSL", d["scancode"]["install_note"])
+        ls.ARCH = "x64"
+        self.assertFalse(ls.check()["scancode"]["unavailable_on_this_platform"])
+        inst = load_module("install_scancode")
+        inst.OS, inst.ARCH = "windows", "arm64"
+        self.assertIn("WSL", inst.unsupported_platform())
+        inst.ARCH = "x64"
+        self.assertIsNone(inst.unsupported_platform())
+
     def test_license_scan_inventory(self):
         out = self.path("lic")
         run(os.path.join(OSS, "license_scan.py"), ACME, "--out-dir", out)

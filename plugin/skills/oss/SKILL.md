@@ -68,7 +68,9 @@ ScanCode Toolkit is the industry-standard licence scanner. It recognises thousan
 python3 <skill-dir>/scripts/license_scan.py <repo-root> --check
 ```
 
-If `scancode.installed` is false, **always ask the user** before going further. Use the AskUserQuestion tool if it's available, otherwise ask in chat. Don't skip the question, and don't install without a yes: it's a large, machine-wide change. Preview what would run first:
+If `scancode.unavailable_on_this_platform` is true (Windows on ARM, where pip cannot build ScanCode's dependencies), there is no install command: tell the user what `install_note` says (WSL or an x64 machine), do not attempt an install or a workaround, continue with the bundled scanner, and record "ScanCode: unavailable on this platform (Windows on ARM)" in the report's tools and coverage sections.
+
+Otherwise, if `scancode.installed` is false, **always ask the user** before going further. Use the AskUserQuestion tool if it's available, otherwise ask in chat. Don't skip the question, and don't install without a yes: it's a large, machine-wide change. Preview what would run first:
 
 ```bash
 python3 <skill-dir>/scripts/install_scancode.py --dry-run

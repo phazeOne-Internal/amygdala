@@ -34,6 +34,9 @@ for _s in (sys.stdout, sys.stderr):
         pass
 
 OS = {"Windows": "windows", "Darwin": "macos"}.get(platform.system(), "linux")
+ARCH = {"ARM64": "arm64", "AARCH64": "arm64", "AMD64": "x64", "X86_64": "x64"}.get(platform.machine().upper(), platform.machine().lower() or "unknown")
+# Platforms where the ScanCode install is known to fail; --check reports these as unavailable with no install command.
+SCANCODE_UNAVAILABLE = {("windows", "arm64"): 'ScanCode cannot be pip-installed on Windows on ARM: its pyicu dependency needs the ICU C library and pkg-config, which pip cannot build there. Run the licence review under WSL (`wsl --install`, then `pipx install scancode-toolkit` inside it) or on an x64 machine; the bundled scanner still runs here and the report records the gap.'}
 SKIP_DIRS = {".git", ".svn", ".hg", ".idea", ".vscode", "__pycache__", ".gradle", "build", "out", "dist",
              "cmake-build-debug", "cmake-build-release", ".pio", "tmp-glibc", "sstate-cache", "downloads"}
 LICENSE_FILE_RX = re.compile(r"^(LICEN[CS]E|COPYING|COPYRIGHT|NOTICE|UNLICENSE|EULA|PATENTS)([._-].*)?$", re.I)
@@ -376,9 +379,11 @@ def check():
     note = {"windows": "The command names a Python version ScanCode has prebuilt wheels for; plain `py` would use your "
                        "newest Python, which may be too new. If pip cannot build it, use the self-contained Windows "
                        "release archive from https://github.com/aboutcode-org/scancode-toolkit/releases."}.get(OS)
-    return {"os": OS, "scancode": {"installed": bool(p), "path": p, "version": ver,
+    unavailable = SCANCODE_UNAVAILABLE.get((OS, ARCH))
+    return {"os": OS, "arch": ARCH, "scancode": {"installed": bool(p), "path": p, "version": ver,
             "size": "large (several hundred MB with licence data); first run is slow",
-            "install_commands": install, "install_note": note,
+            "install_commands": [] if unavailable else install, "install_note": unavailable or note,
+            "unavailable_on_this_platform": bool(unavailable) and not p,
             "installer": "python <skill-dir>/scripts/install_scancode.py --yes   (only after the user agrees; --dry-run to preview)"},
             "run_hint": "scancode --license --copyright --package --info --strip-root --json-pp <out>/scancode.json "
                         "--ignore '.git/*' -n 4 <repo>  (on big trees add --max-in-memory 0 and expect tens of minutes)"}

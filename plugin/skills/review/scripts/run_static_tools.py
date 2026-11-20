@@ -161,26 +161,61 @@ def user_script_dirs():
     return out
 
 
-def find_tool(name):
+def cppcheck_works(path):
+    """Strawberry Perl and some SDKs put a cppcheck on PATH that cannot run a scan (no cfg files); a
+    one-file trial run tells a working install from a stub."""
+    d = tempfile.mkdtemp(prefix="cppcheck-probe-")
+    try:
+        with open(os.path.join(d, "probe.c"), "w", encoding="utf-8") as f:
+            f.write("int main(void) { return 0; }\n")
+        rc, out, err, fail = run([path, "--xml", "--quiet", "--enable=warning", d], 120)
+        return fail is None and rc == 0 and "<results" in err
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+WORKS = {"cppcheck": cppcheck_works}
+_FOUND = {}
+
+
+def tool_candidates(name):
     t = TOOLS[name]
+    cands = []
     for exe in t["exe"]:
         p = shutil.which(exe)
         if p:
-            return p
-    for p in t["extra_paths"].get(OS, []):
-        if os.path.isfile(p):
-            return p
+            cands.append(p)
+    cands += [p for p in t["extra_paths"].get(OS, []) if os.path.isfile(p)]
     for d in user_script_dirs():
         for exe in t["exe"]:
             p = shutil.which(exe, path=d)
             if p:
-                return p
-    return None
+                cands.append(p)
+    seen, out = set(), []
+    for c in cands:
+        k = os.path.normcase(os.path.abspath(c))
+        if k not in seen:
+            seen.add(k)
+            out.append(c)
+    return out
+
+
+def find_tool(name):
+    if name in _FOUND:
+        return _FOUND[name]
+    works = WORKS.get(name)
+    found = None
+    for p in tool_candidates(name):
+        if works is None or works(p):
+            found = p
+            break
+    _FOUND[name] = found
+    return found
 
 
 def tool_version(path):
     try:
-        out = subprocess.run([path, "--version"], capture_output=True, text=True, timeout=60)
+        out = subprocess.run([path, "--version"], capture_output=True, text=True, timeout=60, env=tool_env(path))
         line = (out.stdout or out.stderr).strip().splitlines()
         return line[0][:120] if line else ""
     except Exception as ex:  # noqa: BLE001
@@ -236,10 +271,20 @@ def rel(root, p):
         return p.replace(os.sep, "/")
 
 
+def tool_env(exe):
+    """Environment for running a tool: its own folder goes first on PATH, because wrappers such as
+    semgrep.exe exec a sibling (pysemgrep.exe) by name, and pip --user folders are rarely on PATH."""
+    env = dict(os.environ)
+    d = os.path.dirname(exe) if exe and os.path.isabs(exe) else ""
+    if d:
+        env["PATH"] = d + os.pathsep + env.get("PATH", "")
+    return env
+
+
 def run(cmd, timeout, cwd=None):
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd,
-                           encoding="utf-8", errors="replace")
+                           encoding="utf-8", errors="replace", env=tool_env(cmd[0]))
         return r.returncode, r.stdout, r.stderr, None
     except subprocess.TimeoutExpired:
         return None, "", "", f"timed out after {timeout}s"
@@ -273,7 +318,8 @@ def run_cppcheck(path, root, srcs, incs, args):
     try:
         xroot = ET.fromstring(err[err.find("<?xml"):] if "<?xml" in err else err)
     except ET.ParseError as ex:
-        return [], "failed", f"could not parse cppcheck XML: {ex}; stderr starts: {err[:300]}"
+        detail = " ".join((err or out or "").split())[:300]
+        return [], "failed", f"cppcheck exit {rc}, no usable XML ({ex}); output: {detail or '(none)'}"
     for e in xroot.iter("error"):
         loc = e.find("location")
         if loc is None:

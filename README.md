@@ -86,4 +86,8 @@ The skills invoke Cppcheck, clang-tidy, Flawfinder, Semgrep and ScanCode Toolkit
 
 ## Releasing
 
-Bump `version` in `plugin/.claude-plugin/plugin.json`, commit, then `claude plugin tag plugin` creates the matching `amygdala--v<version>` tag to push. Before submitting to the public plugin directory, add a LICENSE file (or a `license` SPDX id in plugin.json) and a square PNG icon at `plugin/.claude-plugin/icon.png`; `claude plugin validate plugin --profile directory` lists what the directory still refuses.
+Bump `version` in `plugin/.claude-plugin/plugin.json`, commit, then `claude plugin tag plugin` creates the matching `amygdala--v<version>` tag to push. Before submitting to the public plugin directory, add a square PNG icon at `plugin/.claude-plugin/icon.png`; `claude plugin validate plugin --profile directory` lists what the directory still refuses.
+
+## Licence
+
+Apache License 2.0; see [LICENSE](LICENSE). The eval fixture under `evals/review/ectf-2025-insecure-example/` is MITRE's 2025 eCTF insecure example, also Apache-2.0, included unmodified with its own licence file; see [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md).

@@ -8,10 +8,14 @@ evals/, runs the eval there, and copies the results back to evals/results/<times
     python evals/run.py review            # all amygdala:review cases
     python evals/run.py oss               # all amygdala:oss cases
     python evals/run.py all
-    python evals/run.py review -- --json  # anything after -- goes to `claude plugin eval`
+    python evals/run.py review -- --case ectf*      # one case; anything after -- goes to `claude plugin eval`
+    python evals/run.py review -- --runs 1           # one run per case instead of three (cheaper, noisier)
+    python evals/run.py review -- --ablation with-without   # also run a no-plugin baseline arm (doubles cost)
 
 Needs the claude CLI on PATH and an API login; each case runs the skill for real and costs tokens.
-The temporary copy is trusted automatically (--trust-plugin): it is this repository's own code.
+The runner passes --trust-plugin, --scaffold, --allow-tools Bash Write Edit and --ablation none by
+default (see main); it is this repository's own code and fixtures. Each case is 3 runs by default and
+costs roughly $0.3-1 per run, so a full review suite is a few dollars.
 """
 import datetime
 import os
@@ -52,11 +56,23 @@ def main():
                     shutil.copytree(os.path.join(src, case), os.path.join(dest, case))
                     n += 1
         print("running %d case(s) from a temporary copy of the plugin in %s" % (n, work), flush=True)
-        # The copy is this repository's own plugin, so trusting it is honest; without the flag
-        # claude refuses when there is no interactive terminal to ask (e.g. run from Claude Code).
-        if "--trust-plugin" not in extra:
-            extra = ["--trust-plugin", *extra]
-        rc = subprocess.call([claude, "plugin", "eval", work, "--eval-dir", "evals", *extra])
+        # Defaults that make a run meaningful; anything after -- on the command line overrides them:
+        #   --trust-plugin    the copy is this repository's own plugin; without it claude refuses when
+        #                     there is no terminal to ask (e.g. run from inside Claude Code)
+        #   --scaffold        run each case's place-files.sh so the fixture is actually in the workspace;
+        #                     without it the skill reviews an empty folder and every grader fails
+        #   --allow-tools     the skills run their Python scripts (Bash) and write findings.json and the
+        #                     reports (Write/Edit); ungranted, they cannot produce anything to grade
+        #   --ablation none   one arm per case. The default with-without arm doubles the runs and the cost
+        #                     to measure "plugin vs no plugin"; ask for it explicitly when you want that
+        defaults = {"--trust-plugin": [], "--scaffold": [], "--ablation": ["none"],
+                    "--allow-tools": ["Bash", "Write", "Edit"]}
+        for flag, value in defaults.items():
+            if flag not in extra and not (flag == "--scaffold" and "--no-scaffold" in extra):
+                extra = [flag, *value, *extra]
+        cmd = [claude, "plugin", "eval", work, "--eval-dir", "evals", *extra]
+        print("$ " + " ".join(cmd), flush=True)
+        rc = subprocess.call(cmd)
         results = os.path.join(dest, "results")
         if os.path.isdir(results):
             stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")

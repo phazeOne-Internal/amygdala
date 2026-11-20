@@ -1,0 +1,163 @@
+# Embedded / IoT firmware rules for the firmware-review skill.
+# Run locally:  semgrep scan --config embedded-c.yml --metrics=off <dirs>
+# These produce leads; the reviewer verifies each one in context.
+rules:
+  - id: unbounded-string-copy
+    languages: [c, cpp]
+    severity: WARNING
+    message: Unbounded string function — check the destination size against every possible source length.
+    metadata: { cwe: "CWE-120", category: memory-safety }
+    pattern-either:
+      - pattern: strcpy($D, $S)
+      - pattern: strcat($D, $S)
+      - pattern: sprintf($D, ...)
+      - pattern: vsprintf($D, ...)
+      - pattern: gets($D)
+
+  - id: memcpy-length-from-field
+    languages: [c, cpp]
+    severity: WARNING
+    message: memcpy/memmove length comes from a struct field or array element (often packet/header data) — verify it is bounded by the destination size.
+    metadata: { cwe: "CWE-787", category: memory-safety }
+    pattern-either:
+      - pattern: memcpy($D, $S, $P->$LEN)
+      - pattern: memcpy($D, $S, $P.$LEN)
+      - pattern: memcpy($D, $S, $A[$I])
+      - pattern: memmove($D, $S, $P->$LEN)
+      - pattern: memmove($D, $S, $A[$I])
+
+  - id: assert-only-error-handling
+    languages: [c, cpp]
+    severity: WARNING
+    message: Failure is handled only by an assert. Asserts are usually compiled out in release (NDEBUG), so execution continues in a failed state. Define a real failure policy (log + safe state / controlled reset).
+    metadata: { cwe: "CWE-617", category: robustness }
+    pattern-either:
+      - pattern: |
+          if ($R != $OK) { CY_ASSERT(0); }
+      - pattern: |
+          if ($R != $OK) { assert(0); }
+      - pattern: |
+          if ($R != $OK) { configASSERT(0); }
+      - pattern: |
+          if ($R) { CY_ASSERT(0); }
+
+  - id: assert-with-side-effect
+    languages: [c, cpp]
+    severity: ERROR
+    message: Function call inside an assert. Under NDEBUG the whole expression — including the call — is removed from release builds.
+    metadata: { cwe: "CWE-617", category: code-quality }
+    pattern-either:
+      - pattern: CY_ASSERT($F(...) == $X)
+      - pattern: CY_ASSERT($F(...) != $X)
+      - pattern: assert($F(...) == $X)
+      - pattern: assert($F(...) != $X)
+      - pattern: assert($F(...))
+
+  - id: isr-calls-blocking-or-unsafe
+    languages: [c, cpp]
+    severity: ERROR
+    message: Function that looks like an ISR or HAL/driver callback (likely interrupt context) calls a blocking, allocating or non-ISR-safe API. Use the FromISR / deferred-work variants.
+    metadata: { category: concurrency }
+    patterns:
+      - pattern-inside: |
+          $RET $FN(...) { ... }
+      - metavariable-regex:
+          metavariable: $FN
+          regex: (?i).*(_isr|isr_|irqhandler|_irq$|_handler$|_cb$|callback|_changed$|_event$)
+      - pattern-either:
+          - pattern: printf(...)
+          - pattern: puts(...)
+          - pattern: malloc(...)
+          - pattern: free(...)
+          - pattern: vTaskDelay(...)
+          - pattern: xSemaphoreTake(...)
+          - pattern: xSemaphoreGive(...)
+          - pattern: xQueueSend(...)
+          - pattern: xQueueReceive(...)
+          - pattern: cyhal_system_delay_ms(...)
+          - pattern: k_mutex_lock(...)
+          - pattern: k_sleep(...)
+          - pattern: k_msleep(...)
+          - pattern: HAL_Delay(...)
+
+  - id: tls-verification-disabled
+    languages: [c, cpp]
+    severity: ERROR
+    message: TLS peer verification disabled or optional — a network attacker can impersonate the server.
+    metadata: { cwe: "CWE-295", category: security }
+    pattern-either:
+      - pattern: $X = CY_AWS_ROOTCA_VERIFY_NONE
+      - pattern: $X = CY_SOCKET_TLS_VERIFY_NONE
+      - pattern: mbedtls_ssl_conf_authmode($C, MBEDTLS_SSL_VERIFY_NONE)
+      - pattern: mbedtls_ssl_conf_authmode($C, MBEDTLS_SSL_VERIFY_OPTIONAL)
+      - pattern: $X.skip_cert_common_name_check = true
+      - pattern: $C.setInsecure()
+
+  - id: insecure-rng
+    languages: [c, cpp]
+    severity: WARNING
+    message: rand()/srand() are not cryptographically secure — check this is not used for keys, nonces, tokens or IDs.
+    metadata: { cwe: "CWE-338", category: security }
+    pattern-either:
+      - pattern: rand()
+      - pattern: srand(...)
+
+  - id: tick-compare-not-wrap-safe
+    languages: [c, cpp]
+    severity: WARNING
+    message: Time/tick value compared directly against a deadline. 32-bit tick counters wrap (about 49.7 days at 1 kHz); use (int32_t)(now - deadline) >= 0 or elapsed-time subtraction.
+    metadata: { cwe: "CWE-190", category: robustness }
+    pattern-either:
+      - pattern: xTaskGetTickCount() > $D
+      - pattern: HAL_GetTick() > $D
+      - pattern: millis() > $D
+      - pattern: k_uptime_get_32() > $D
+      - pattern: k_uptime_get_32() >= $D
+      - patterns:
+          - pattern-inside: |
+              $NOW = xTaskGetTickCount();
+              ...
+          - pattern: $NOW > $D
+      - patterns:
+          - pattern-inside: |
+              $NOW = HAL_GetTick();
+              ...
+          - pattern: $NOW > $D
+
+  - id: empty-infinite-loop
+    languages: [c, cpp]
+    severity: WARNING
+    message: Empty infinite loop (error or fault path). Without a watchdog this hangs the device forever; record the reason and reset instead.
+    metadata: { category: robustness }
+    pattern-either:
+      - pattern: while (1);
+      - pattern: while (1) {}
+      - pattern: while (true);
+      - pattern: |
+          for (;;);
+
+  - id: unchecked-hal-init
+    languages: [c, cpp]
+    severity: INFO
+    message: Return value of an init/driver call is discarded. Check it and handle failure.
+    metadata: { cwe: "CWE-252", category: robustness }
+    patterns:
+      - pattern: $F(...);
+      - metavariable-regex:
+          metavariable: $F
+          regex: ^(cyhal_\w+_(init|configure|start|write|read)|cy_(wcm|mqtt)_\w+|Cy_\w+_Init|HAL_\w+_Init|settings_save_one|nvs_write|bt_le_adv_start|gpio_pin_configure_dt)$
+
+  - id: secret-in-log
+    languages: [c, cpp]
+    severity: ERROR
+    message: A value whose name suggests a secret is passed to a print/log call.
+    metadata: { cwe: "CWE-532", category: security }
+    patterns:
+      - pattern-either:
+          - pattern: printf(..., $V, ...)
+          - pattern: LOG_INF(..., $V, ...)
+          - pattern: LOG_DBG(..., $V, ...)
+          - pattern: ESP_LOGI(..., $V, ...)
+      - metavariable-regex:
+          metavariable: $V
+          regex: (?i).*(passw|secret|key|token|psk|pin|code).*

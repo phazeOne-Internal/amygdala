@@ -1,0 +1,14 @@
+schema_version: "1.1"
+name: psoc6-mqtt-sensor-release
+context:
+  scaffold_script: place-files.sh
+expected_outcome: |
+  Detects Infineon PSoC 6 / ModusToolbox with FreeRTOS. Produces a RAG report (HTML for the manager, Markdown for
+  developers, CSV) with an overall NOT READY verdict. Red findings include: hardcoded Wi-Fi password and shared client
+  private key; TLS server verification disabled (CY_AWS_ROOTCA_VERIFY_NONE, root_ca NULL); strcpy/memcpy overflows in
+  the MQTT command handler (cmd_topic, cmd[32], arg[128], topic[65]); unauthenticated "factory" and "peek" cloud commands
+  (arbitrary memory read); OTA over plain HTTP with validation disabled plus MCUboot sample signing key in keys/;
+  GPIO callback (ISR context) calling printf and xSemaphoreGive (non-FromISR); flash write of every sample (wear-out).
+  Amber findings include CY_ASSERT-only error handling compiled out in release, watchdog kicked from a timer ISR,
+  HardFault handler that spins, tick comparison not wrap-safe, stack overflow checking off, MBEDTLS_NO_PLATFORM_ENTROPY /
+  no TRNG, old mbedTLS 2.25.0, CONFIG=Debug, no reset-reason handling. Maps issues to PSTI / EN 303 645 / CRA.

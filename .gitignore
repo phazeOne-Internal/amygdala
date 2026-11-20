@@ -12,5 +12,5 @@ __pycache__/
 # Eval run outputs and demo workspaces (regenerable; not part of the skills)
 firmware-review-workspace/
 
-# Review outputs generated inside a reviewed repo
-firmware-review/
+# NOTE: do not add a bare "firmware-review/" pattern here: it would also match
+# .claude/skills/firmware-review/ and silently drop the skill from the repo.

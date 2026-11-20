@@ -1,0 +1,14 @@
+schema_version: "1.1"
+name: zephyr-ble-lock-audit
+context:
+  scaffold_script: place-files.sh
+expected_outcome: |
+  Detects Zephyr RTOS / nRF Connect SDK on an nRF52840 (from the board overlay). Produces a RAG report with an overall
+  NOT READY verdict. Red findings include: GATT write handler copies attacker-controlled code_len (up to 255) into a
+  16-byte stack buffer and reads p[1] without checking len; lock command characteristic writable without encryption or
+  authentication (BT_GATT_PERM_WRITE) and the lock code readable in plaintext (BT_GATT_PERM_READ); fixed BLE passkey
+  123456 and default unlock code "0000" (UK PSTI / EN 303 645 5.1 / RED EN 18031 blocker); unlock code logged; GPIO
+  door callback (ISR context) calling motor_lock which takes a mutex with K_FOREVER and sleeps; MCUboot sample key
+  root-ec-p256.pem. Amber findings include no watchdog, CONFIG_RESET_ON_FATAL_ERROR=n and while(1) on bt_enable failure,
+  k_uptime_get_32 wraparound in auto-relock, settings_save_one result ignored, settings load length unbounded, shell
+  and debug logging enabled, west.yml revision unpinned (main), no replay protection, shared flags not atomic.

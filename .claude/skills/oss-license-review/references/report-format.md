@@ -5,6 +5,13 @@
 ```json
 "report": {
   "title": "Open-source licence review",
+  "must_fix_heading": "Must resolve before distribution",
+  "verdict_sub": {
+    "red": "{n} Red issue(s) block distribution until resolved.",
+    "amber": "No Red issues. {n} Amber issue(s) need their obligations met or a recorded decision before distribution.",
+    "green": "No Red or Amber licence issues found in the areas scanned.",
+    "green_tracking": "No open Red or Amber licence issues in the areas scanned."
+  },
   "categories": [
     ["strong-copyleft", "Strong copyleft (GPL family)"],
     ["network-copyleft", "Network copyleft (AGPL / SSPL)"],

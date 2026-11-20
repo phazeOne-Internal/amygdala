@@ -1,0 +1,11 @@
+schema_version: "1.1"
+name: psoc6-well-engineered
+context:
+  scaffold_script: place-files.sh
+expected_outcome: |
+  A well-engineered codebase. The review should not call it NOT READY: verdict Amber (conditional) or Green, with
+  no Red findings unless genuinely justified. It should credit the strengths (supervisor watchdog, crash record and reset
+  reason reporting, per-device credentials from kv-store refusing to run unprovisioned, TLS verify required, signed OTA
+  with validate-after-reboot, capped backoff, bounded command parser with unit tests, SECURITY.md covering disclosure,
+  support period and SBOM). Reasonable residual items: I2C timeout 0 (infinite), debug-port lock / lifecycle evidence,
+  minor quality points. Must not flag bounded memcpy/snprintf as overflows.

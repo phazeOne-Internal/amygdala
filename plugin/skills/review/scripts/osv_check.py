@@ -38,7 +38,7 @@ if sys.version_info < (3, 8):
     sys.exit("This script needs Python 3.8 or later (any interpreter on PATH is fine); found " + sys.version.split()[0])
 
 OSV_HOST = "https://api.osv.dev"
-USER_AGENT = "phazeone-amygdala/0.2 (OSV dependency lookup)"
+USER_AGENT = "phazeone-amygdala/0.3 (OSV dependency lookup)"
 TIMEOUT = 30
 
 # Upstream aliases for vendor mirrors: query the mirror as given AND the upstream, because advisories are

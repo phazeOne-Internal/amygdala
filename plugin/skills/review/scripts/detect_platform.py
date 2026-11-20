@@ -67,6 +67,8 @@ PATH_MARKERS = [
     ("Infineon XMC", r"xmclib|XMC[0-9]{4}", 4, "XMC library"),
     ("Infineon AIROC Bluetooth (CYW20xxx)", r"TARGET_CYW20|btsdk", 4, "AIROC BT SDK target"),
     ("Raspberry Pi Pico (RP2040/RP2350)", r"pico_sdk_import\.cmake", 5, "Pico SDK import"),
+    ("Analog Devices MAX32/MAX78 (MSDK)", r"(^|/)project\.mk$", 2, "MSDK project.mk"),
+    ("Analog Devices MAX32/MAX78 (MSDK)", r"(^|/)(msdk|MaximSDK)(/|$)", 4, "MSDK directory"),
 ]
 
 # (platform, regex applied to source content, weight, description)
@@ -96,6 +98,9 @@ CONTENT_MARKERS = [
     ("TI SimpleLink", r"#include\s*[<\"]ti/drivers/", 3, "TI drivers"),
     ("Microchip / Atmel", r"#include\s*[<\"](atmel_start|asf|xc)\.h", 3, "Microchip headers"),
     ("Raspberry Pi Pico (RP2040/RP2350)", r"#include\s*[<\"]pico/stdlib\.h", 4, "pico/stdlib.h"),
+    ("Analog Devices MAX32/MAX78 (MSDK)", r"#include\s*[<\"]mxc_(device|delay|sys)\.h", 4, "includes mxc_device.h"),
+    ("Analog Devices MAX32/MAX78 (MSDK)", r"\bMXC_(FLC|GPIO|UART|ICC|Delay|NVIC)[A-Za-z_]*\s*\(|\bMXC_F_[A-Z0-9_]+", 2, "MXC_ driver calls"),
+    ("Analog Devices MAX32/MAX78 (MSDK)", r"\bMAX(32[0-9]{3}|78[0-9]{3})\b|BOARD\s*=\s*FTHR", 2, "MAX32/MAX78 part or board"),
 ]
 
 RTOS_MARKERS = [

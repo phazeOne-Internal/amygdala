@@ -1,3 +1,5 @@
+<img src="docs/brand/amygdala-icon-128.png" width="96" align="right" alt="">
+
 # Amygdala Firmware Code Review Tool
 
 A Claude Code plugin from ./phazeOne that spots the dangers in embedded / IoT firmware before they reach the field: review the code, check its open-source licences, and work through the findings.
@@ -96,7 +98,7 @@ The skills invoke Cppcheck, clang-tidy, Flawfinder, Semgrep and ScanCode Toolkit
 
 ## Releasing
 
-Bump `version` in `plugin/.claude-plugin/plugin.json`, commit, then `claude plugin tag plugin` creates the matching `amygdala--v<version>` tag to push. Before submitting to the public plugin directory, add a square PNG icon at `plugin/.claude-plugin/icon.png`; `claude plugin validate plugin --profile directory` lists what the directory still refuses.
+Bump `version` in `plugin/.claude-plugin/plugin.json`, commit, then `claude plugin tag plugin` creates the matching `amygdala--v<version>` tag to push. The plugin icon is `plugin/.claude-plugin/icon.png` (1024 px); its SVG source is `docs/brand/amygdala-icon.svg`. `claude plugin validate plugin --profile directory` checks what the public plugin directory requires.
 
 ## Licence
 

@@ -48,6 +48,13 @@ def run(script, *args, env=None, expect=0, cwd=None, timeout=600):
     return cp
 
 
+def glob_one(pattern):
+    import glob
+    matches = sorted(p for p in glob.glob(pattern) if os.path.isdir(p))
+    assert matches, "no directory matches " + pattern
+    return matches[0]
+
+
 def read(path):
     with open(path, encoding="utf-8") as f:
         return f.read()
@@ -144,6 +151,33 @@ class ReviewScripts(TempDirTest):
         self.assertIn("Hotspot leads", text)
         self.assertIn("leads to read in context, not findings", text)
         self.assertGreater(len(text.splitlines()), 20)
+
+    def test_hotspots_flags_calls_inside_interrupt_handlers(self):
+        """A blocking call inside a function that is an interrupt handler, by name or by registration, is
+        reported under its own rule with the handler named; one level of indirection is followed."""
+        ectf = os.path.join(EVALS, "review", "ectf-2025-insecure-example", "files", "2025-ectf-insecure-example")
+        cp = run(os.path.join(REVIEW, "hotspots.py"), ectf, "--json")
+        d = json.loads(cp.stdout)
+        self.assertIn({"file": "decoder/src/simple_flash.c", "line": 29, "name": "flash_simple_irq"}, d["interrupt_handlers"],
+                      "handler registered via MXC_NVIC_SetVector not recognised")
+        hits = d["hits"]["isr-blocking-in-isr"]["samples"]
+        self.assertTrue(any(h["file"] == "decoder/src/simple_flash.c" and h["line"] == 39 and h["isr"] == "flash_simple_irq"
+                            for h in hits), hits)
+        plug = glob_one(os.path.join(EVALS, "review", "psoc6-subtle-defects", "files", "*"))
+        d = json.loads(run(os.path.join(REVIEW, "hotspots.py"), plug, "--exclude", "mtb_shared", "--json").stdout)
+        hits = d["hits"]["isr-blocking-in-isr"]["samples"]
+        self.assertTrue(any(h["isr"] == "zero_cross_isr" and h.get("via") == "relay_apply" for h in hits),
+                        "indirect blocking call from zero_cross_isr via relay_apply not reported: " + json.dumps(hits))
+        lock = glob_one(os.path.join(EVALS, "review", "zephyr-ble-lock-audit", "files", "*"))
+        d = json.loads(run(os.path.join(REVIEW, "hotspots.py"), lock, "--json").stdout)
+        hits = d["hits"]["isr-blocking-in-isr"]["samples"]
+        self.assertTrue(any(h["isr"] == "door_changed" and h.get("via") == "motor_lock" for h in hits),
+                        "two-level indirect blocking call from door_changed via motor_lock not reported: " + json.dumps(hits))
+        md = run(os.path.join(REVIEW, "hotspots.py"), ectf, "--out", self.path("h.md"))
+        text = read(self.path("h.md"))
+        self.assertIn("## Interrupt handlers found", text)
+        self.assertIn("INSIDE an interrupt handler", text)
+        self.assertIn("(in handler `flash_simple_irq`)", text)
 
     def test_static_tools_check(self):
         cp = run(os.path.join(REVIEW, "run_static_tools.py"), PSOC6, "--check")

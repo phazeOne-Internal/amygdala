@@ -63,7 +63,7 @@ Two sources of leads: the bundled pattern scanner, which always works, and real 
 python3 <skill-dir>/scripts/hotspots.py <repo-root> --exclude <vendored-dir> ... --out <out-dir>/hotspots.md
 ```
 
-This greps first-party code for risky patterns: unbounded string functions, hardcoded credentials and keys, disabled TLS verification, weak crypto, asserts used as error handling, empty fault handlers, debug leftovers, dynamic allocation and so on.
+This greps first-party code for risky patterns: unbounded string functions, hardcoded credentials and keys, disabled TLS verification, weak crypto, asserts used as error handling, empty fault handlers, debug leftovers, dynamic allocation and so on. It also lists the **interrupt handlers** it can identify (by name, or because the function is passed to a registration call such as `NVIC_SetVector`, `IRQ_CONNECT`, `cyhal_*_register_callback`, `gpio_init_callback`, `attachInterrupt`) and reports any blocking or non-ISR-safe call made inside one, directly or through one first-party helper, under its own heading at the top of the concurrency section. Treat those as strong leads: the handler context is established, so the only question left is whether the call is reachable, and the checklist rates `printf`, delays, mutex takes, flash writes and `malloc` in interrupt context as Red. Handlers the scanner cannot see (registered through a struct it does not know, or named unconventionally) still need you to check the registration code by hand.
 
 **b. Static analysers.** First check what is installed. This installs nothing:
 

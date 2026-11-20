@@ -157,7 +157,7 @@ class ReviewScripts(TempDirTest):
         for tool in REQUIRED_TOOLS:
             self.assertEqual(status[tool], "ran", tool + ": " + json.dumps(d["tools"]))
             self.assertGreater(sum(t["leads"] for t in d["tools"] if t["name"] == tool), 0,
-                               tool + " found no leads in a fixture full of planted defects")
+                               tool + " found no leads in a fixture full of planted defects: " + json.dumps(d["tools"]))
 
     def test_osv_plan_mode_sends_nothing(self):
         out = self.path("osv")

@@ -58,7 +58,12 @@ Scripts are plain Python 3 (3.8 or later) with no third-party dependencies and r
 python -m unittest discover -s tests -v
 ```
 
-GitHub Actions (`.github/workflows/ci.yml`) runs it on every pull request and push to `main` on Ubuntu, Windows and macOS with the oldest supported Python and the current one, once more on Ubuntu with cppcheck, flawfinder and semgrep installed so the analyser integration is exercised for real, and validates the plugin and marketplace manifests with `claude plugin validate`. The model-graded evals under `plugin/skills/*/evals/` are not part of CI; run them locally with `claude plugin eval`.
+GitHub Actions (`.github/workflows/ci.yml`) runs it on every pull request and push to `main`:
+
+- the suite on Ubuntu, Windows and macOS with the oldest supported Python and the current one;
+- on each of the three, a job that installs cppcheck, flawfinder and semgrep using the exact commands `run_static_tools.py --check` prints for that operating system (`tests/install_tools.py`), then requires all three to run on the fixture, so the install advice the skill gives users is tested, not just typed;
+- on Ubuntu and Windows, a job that installs ScanCode Toolkit with `install_scancode.py --yes` and runs a real `--run-scancode` scan;
+- plugin and marketplace validation with `claude plugin validate`. The model-graded evals under `plugin/skills/*/evals/` are not part of CI; run them locally with `claude plugin eval`.
 
 ## Security
 

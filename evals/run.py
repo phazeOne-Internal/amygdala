@@ -11,6 +11,7 @@ evals/, runs the eval there, and copies the results back to evals/results/<times
     python evals/run.py review -- --json  # anything after -- goes to `claude plugin eval`
 
 Needs the claude CLI on PATH and an API login; each case runs the skill for real and costs tokens.
+The temporary copy is trusted automatically (--trust-plugin): it is this repository's own code.
 """
 import datetime
 import os
@@ -51,6 +52,10 @@ def main():
                     shutil.copytree(os.path.join(src, case), os.path.join(dest, case))
                     n += 1
         print("running %d case(s) from a temporary copy of the plugin in %s" % (n, work), flush=True)
+        # The copy is this repository's own plugin, so trusting it is honest; without the flag
+        # claude refuses when there is no interactive terminal to ask (e.g. run from Claude Code).
+        if "--trust-plugin" not in extra:
+            extra = ["--trust-plugin", *extra]
         rc = subprocess.call([claude, "plugin", "eval", work, "--eval-dir", "evals", *extra])
         results = os.path.join(dest, "results")
         if os.path.isdir(results):

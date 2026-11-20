@@ -1,0 +1,93 @@
+{
+  "project": {
+    "name": "ci-sample-sensor",
+    "repo_path": "/tmp/ci-sample-sensor",
+    "version": "v0.0.1-test",
+    "review_date": "2026-11-20 10:00",
+    "reviewer": "Claude (firmware:review skill)",
+    "platform": {
+      "summary": "Infineon PSoC 6 · ModusToolbox 3.x · FreeRTOS 10.4 · Wi-Fi · MQTT/TLS",
+      "detection_confidence": "high",
+      "notes": "Synthetic fixture used by the test suite"
+    },
+    "scope": {
+      "first_party_paths": ["source/"],
+      "excluded_paths": ["mtb_shared/", "libs/"],
+      "files_reviewed": 3,
+      "first_party_loc": 120
+    }
+  },
+  "summary": {
+    "overview": "Synthetic review used to exercise the renderer in CI. The numbers and findings are made up.",
+    "key_risks": ["A credential is committed in source", "A linked library has a published vulnerability"],
+    "strengths": ["Watchdog is enabled and kicked from the main loop"]
+  },
+  "coverage": [
+    {"area": "memory-safety", "status": "reviewed", "notes": ""},
+    {"area": "security", "status": "reviewed", "notes": ""},
+    {"area": "secure-boot-ota", "status": "not_reviewed", "notes": "Bootloader is a vendor binary"},
+    {"area": "robustness", "status": "reviewed", "notes": ""},
+    {"area": "concurrency", "status": "partial", "notes": "ISR paths only"},
+    {"area": "hardware-power", "status": "reviewed", "notes": ""},
+    {"area": "dependencies", "status": "reviewed", "notes": ""},
+    {"area": "field-readiness", "status": "reviewed", "notes": ""},
+    {"area": "regulatory", "status": "reviewed", "notes": ""},
+    {"area": "code-quality", "status": "reviewed", "notes": ""}
+  ],
+  "tools": [
+    {"name": "hotspots.py", "status": "ran", "notes": "12 leads"},
+    {"name": "cppcheck 2.22.0", "status": "ran", "notes": "4 leads"},
+    {"name": "semgrep", "status": "not_available", "notes": "not installed"}
+  ],
+  "findings": [
+    {
+      "id": "FW-001",
+      "title": "MQTT password committed in source",
+      "rag": "red",
+      "category": "security",
+      "confidence": "confirmed",
+      "location": {"file": "source/mqtt_config.h", "line": 12},
+      "other_locations": [],
+      "evidence": "#define MQTT_PASSWORD \"hunter2-SECRET-VALUE-9f8e7d\"\nstatic const char *api_key = \"sk_live_SECRET_KEY_0123456789\";",
+      "description": "The broker password and an API key are compiled into every unit as string literals.",
+      "impact": "Anyone with a firmware image, or any one device, can read the shared credential and impersonate every device in the fleet.",
+      "recommendation": "Provision a per-device credential at manufacture, store it in protected flash and rotate the leaked one now.",
+      "effort": "M",
+      "origin": "first-party",
+      "references": ["CWE-798", "ETSI EN 303 645 5.1-1"]
+    },
+    {
+      "id": "FW-002",
+      "title": "zlib 1.2.11 has published vulnerabilities (CVE-2018-25032, CVE-2022-37434)",
+      "rag": "amber",
+      "category": "dependencies",
+      "confidence": "needs-verification",
+      "location": {"file": "deps/zlib.mtb", "line": null},
+      "other_locations": [],
+      "evidence": "",
+      "description": "OSV.dev lists two advisories against the linked zlib tag. Whether the affected inflate paths are compiled in and reachable from external input has not been confirmed.",
+      "impact": "If reachable from network input, a crafted stream can corrupt heap memory.",
+      "recommendation": "Update to zlib 1.3.x, or confirm the affected functions are not linked.",
+      "effort": "S",
+      "origin": "third-party",
+      "references": ["CVE-2018-25032", "CVE-2022-37434"]
+    },
+    {
+      "id": "FW-003",
+      "title": "Magic numbers for retry limits",
+      "rag": "green",
+      "category": "code-quality",
+      "confidence": "confirmed",
+      "location": {"file": "source/main.c", "line": 40},
+      "other_locations": [],
+      "evidence": "for (int i = 0; i < 7; i++) {",
+      "description": "Retry counts are literals scattered across the file.",
+      "impact": "Maintenance only.",
+      "recommendation": "Name the constants in one header.",
+      "effort": "S",
+      "origin": "first-party",
+      "references": []
+    }
+  ],
+  "next_steps": ["Add cppcheck to CI"]
+}

@@ -60,6 +60,11 @@ def read(path):
         return f.read()
 
 
+def write(path, text):
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
+
+
 def load(path):
     with open(path, encoding="utf-8") as f:
         return json.load(f)
@@ -214,6 +219,37 @@ class ReviewScripts(TempDirTest):
         self.assertTrue(cc["install_commands"])
         mod.ARCH = "x64"
         self.assertFalse(mod.check(PSOC6)["tools"]["semgrep"]["unavailable_on_this_platform"])
+
+    def test_hotspots_layering(self):
+        """Layering leads fire on the smart-plug fixture (drivers/relay.c includes app.h and calls app functions),
+        stay silent where no layers are visible, and honour --layer overrides and the register-write rule."""
+        plug = glob_one(os.path.join(EVALS, "review", "psoc6-subtle-defects", "files", "*"))
+        d = json.loads(run(os.path.join(REVIEW, "hotspots.py"), plug, "--json").stdout)
+        self.assertEqual(d["layers"]["lower"], ["source/drivers/relay.c"])
+        self.assertIn("source/app/main.c", d["layers"]["upper"])
+        inc = d["hits"]["layer-upward-include"]["samples"]
+        self.assertTrue(any(h["file"] == "source/drivers/relay.c" and h["header"] == "source/app/app.h" for h in inc), inc)
+        calls = {h["callee"] for h in d["hits"]["layer-upward-call"]["samples"]}
+        self.assertEqual(calls, {"config_load", "wdt_checkin"})
+        md = run(os.path.join(REVIEW, "hotspots.py"), plug).stdout
+        self.assertIn("## Layering", md)
+        self.assertIn("`config_load` is defined in `source/app/config_store.c`", md)
+        # no layers visible -> explicit note, no layer-* hits
+        d2 = json.loads(run(os.path.join(REVIEW, "hotspots.py"), PSOC6, "--json").stdout)
+        self.assertIn("not inferable", d2["layers"]["note"])
+        self.assertFalse([r for r in d2["hits"] if r.startswith("layer-")])
+        # overrides + direct register write in application code
+        root = os.path.join(self.tmp, "flat")
+        os.makedirs(os.path.join(root, "lowlevel_stuff")); os.makedirs(os.path.join(root, "logic_stuff"))
+        write(os.path.join(root, "lowlevel_stuff", "uart.c"), '#include "cloud.h"\nvoid uart_rx(void) { cloud_publish(1); }\n')
+        write(os.path.join(root, "logic_stuff", "cloud.h"), "void cloud_publish(int x);\n")
+        write(os.path.join(root, "logic_stuff", "cloud.c"), "void cloud_publish(int x) { GPIO_PRT9->OUT |= 1u; *(volatile uint32_t *)0x40320000 = x; }\n")
+        d3 = json.loads(run(os.path.join(REVIEW, "hotspots.py"), root, "--json",
+                            "--layer", "lower=lowlevel_stuff", "--layer", "upper=logic_stuff").stdout)
+        self.assertEqual(d3["layers"]["basis"], ["override"])
+        self.assertEqual(d3["hits"]["layer-upward-call"]["samples"][0]["callee"], "cloud_publish")
+        self.assertEqual(d3["hits"]["layer-upward-include"]["count"], 1)
+        self.assertEqual(d3["hits"]["layer-register-access-in-app"]["count"], 2)
 
     def test_static_tools_check(self):
         cp = run(os.path.join(REVIEW, "run_static_tools.py"), PSOC6, "--check")

@@ -174,6 +174,8 @@ Rate these mostly Green or Amber. Only raise to Red if the problem is itself pro
 | Duplicated logic that has already diverged (one copy fixed, the other not) | Amber |
 | Dead code, `#if 0` blocks, commented-out code | Green |
 | Mixed layers: application logic calling registers directly, HAL calls scattered through business logic | Green–Amber |
+| Upward dependency: a driver / HAL / BSP file includes an application header or calls an application function directly (`hotspots.py` lists these as `layer-upward-*` when it can tell the layers apart). The driver cannot be unit-tested or reused, and application state leaks into hardware code | Green; Amber if the call runs in interrupt context or makes the driver depend on application state (configuration, connectivity, watchdog). Fix: the application registers a callback or the driver posts to a queue; then make the build enforce it (per-layer libraries / include paths, ESP-IDF `REQUIRES`, Zephyr CMake libraries) |
+| Application code writes peripheral registers directly (`PERIPH->REG = …`, `*(volatile uint32_t *)0x…`) instead of going through the driver | Green; Amber if it races the driver's own use of the same peripheral |
 | Contradictory or untested `#ifdef` configurations | Amber |
 | Units unclear (ms vs ticks, mV vs V); implicit conversions between them | Amber |
 | No unit tests for parsers, state machines and protocol code; no CI build | Amber |

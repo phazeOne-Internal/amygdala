@@ -39,25 +39,16 @@ jobs:
 
   analysers:
     name: Scripts with cppcheck, flawfinder and semgrep (Linux)
-    runs-on: ubuntu-latest
+    # Pinned: semgrep's engine is killed on the ubuntu-latest (26.04) image under the newest Python.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
+          python-version: "3.12"
       - run: sudo apt-get update && sudo apt-get install -y cppcheck
       - run: python -m pip install --upgrade pip flawfinder semgrep
-      - name: Semgrep sanity check on the fixture (debug output)
-        env:
-          SEMGREP_SEND_METRICS: "off"
-        run: |
-          cd plugin/skills/review/evals/psoc6-mqtt-sensor-release/files/psoc6-mqtt-sensor
-          semgrep --version
-          semgrep scan --config ../../../../assets/semgrep/embedded-c.yml --metrics=off --json --disable-version-check --timeout 30 source 2>semgrep.err > semgrep.json || true
-          python -c "import json; d=json.load(open('semgrep.json')); print('results', len(d.get('results', [])), 'errors', d.get('errors', [])[:5]); print('paths', d.get('paths'))"
-          echo '--- stderr ---'; cat semgrep.err
-          rm -f semgrep.err semgrep.json
       - name: Run the script test suite with the analysers present
         env:
           FW_TEST_REQUIRE_TOOLS: cppcheck,flawfinder,semgrep

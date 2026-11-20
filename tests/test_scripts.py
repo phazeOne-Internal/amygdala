@@ -194,6 +194,27 @@ class ReviewScripts(TempDirTest):
         self.assertIn("INSIDE an interrupt handler", text)
         self.assertIn("(in handler `flash_simple_irq`)", text)
 
+    def test_check_marks_semgrep_unavailable_on_windows_arm(self):
+        """On Windows on ARM pip cannot build semgrep's dependencies (seen on the Windows VM test), so --check
+        must report it unavailable with a WSL note and no install command instead of a doomed pip command."""
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("rst", os.path.join(REVIEW, "run_static_tools.py"))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        mod.OS, mod.ARCH = "windows", "arm64"
+        mod.find_tool = lambda name: None
+        d = mod.check(PSOC6)
+        self.assertEqual(d["arch"], "arm64")
+        sg = d["tools"]["semgrep"]
+        self.assertTrue(sg["unavailable_on_this_platform"])
+        self.assertEqual(sg["install_commands"], [])
+        self.assertIn("WSL", sg["install_note"])
+        cc = d["tools"]["cppcheck"]
+        self.assertFalse(cc["unavailable_on_this_platform"])
+        self.assertTrue(cc["install_commands"])
+        mod.ARCH = "x64"
+        self.assertFalse(mod.check(PSOC6)["tools"]["semgrep"]["unavailable_on_this_platform"])
+
     def test_static_tools_check(self):
         cp = run(os.path.join(REVIEW, "run_static_tools.py"), PSOC6, "--check")
         d = json.loads(cp.stdout)

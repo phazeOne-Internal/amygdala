@@ -95,6 +95,8 @@ If any are missing, **ask the user before installing anything**. Use the AskUser
 - the exact install command for their OS (from the `--check` output). On Windows, winget/choco may need an Administrator terminal, while `pip --user` installs don't;
 - the option to carry on without them. The review still works, with lower mechanical coverage, and the report records the gap.
 
+A tool with `unavailable_on_this_platform: true` (for example semgrep on Windows on ARM, where pip cannot build its dependencies) has no install command. Do not try to install it or work around it; show the user the `install_note`, which says where it would work (WSL, an x64 machine), and record it in the report's `tools` section as skipped with that reason.
+
 If the user approves, run the install commands, or suggest they run them with `! <command>` when elevation or an interactive prompt is needed. On Windows, a newly installed tool may not be on PATH until a new terminal is opened. The script also looks in the standard install folders, so re-run `--check` to confirm. Never install without a yes from the user: these are changes to their machine.
 
 If clang-tidy is installed but there's no `compile_commands.json`, tell the user how to generate one (the `--check` output has a hint per build system). Don't run a build yourself without asking: building may need their toolchain and can take a long time. Without a build database, clang-tidy is skipped and the report says why.

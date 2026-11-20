@@ -45,6 +45,7 @@ for _s in (sys.stdout, sys.stderr):  # Windows consoles default to cp1252; code 
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SEMGREP_RULES = os.path.join(SKILL_DIR, "assets", "semgrep", "embedded-c.yml")
 OS = {"Windows": "windows", "Darwin": "macos"}.get(platform.system(), "linux")
+ARCH = {"ARM64": "arm64", "AARCH64": "arm64", "AMD64": "x64", "X86_64": "x64"}.get(platform.machine().upper(), platform.machine().lower() or "unknown")
 
 DEFAULT_EXCLUDES = {
     "mtb_shared", "libs", "deps", "third_party", "thirdparty", "third-party", "vendor", "external",
@@ -108,6 +109,12 @@ TOOLS = {
         "install_note": {"windows": "The command names a Python version semgrep has prebuilt wheels for; plain `py` would use "
                                     "your newest Python, which may be too new. Native Windows support in semgrep is recent; "
                                     "if the install or the first run still fails, use WSL."},
+        # Platforms where the install is known to fail; --check reports these as unavailable with no install command,
+        # so the user is not sent down a pip build that dies after several minutes.
+        "unavailable": {("windows", "arm64"): "No prebuilt wheels for Windows on ARM (cryptography, ruamel.yaml.clib), so "
+                                             "pip tries to compile them and fails. Run the review under WSL "
+                                             "(`wsl --install`, then `pip install semgrep` inside it) or on an x64 machine "
+                                             "to get semgrep coverage; the review continues without it."},
         "size": "medium (~200 MB)",
     },
 }
@@ -438,15 +445,17 @@ def check(root):
     tools = {}
     for name, t in TOOLS.items():
         p = find_tool(name)
+        unavailable = t.get("unavailable", {}).get((OS, ARCH))
         tools[name] = {
             "installed": bool(p), "path": p, "version": tool_version(p) if p else None,
             "purpose": t["purpose"], "size": t["size"],
-            "install_commands": install_commands(t),
-            "install_note": t.get("install_note", {}).get(OS),
+            "install_commands": [] if unavailable else install_commands(t),
+            "install_note": unavailable or t.get("install_note", {}).get(OS),
+            "unavailable_on_this_platform": bool(unavailable),
         }
     db = find_compile_db(root)
     return {
-        "os": OS, "python": sys.executable,
+        "os": OS, "arch": ARCH, "python": sys.executable,
         "tools": tools,
         "missing": [n for n, v in tools.items() if not v["installed"]],
         "compile_commands_json": rel(root, db) if db else None,

@@ -24,8 +24,9 @@ REVIEW = os.path.join(SKILLS, "review", "scripts")
 OSS = os.path.join(SKILLS, "oss", "scripts")
 FIX = os.path.join(SKILLS, "fix", "scripts")
 FIXTURES = os.path.join(ROOT, "tests", "fixtures")
-PSOC6 = os.path.join(SKILLS, "review", "evals", "psoc6-mqtt-sensor-release", "files", "psoc6-mqtt-sensor")
-ACME = os.path.join(SKILLS, "oss", "evals", "acme-hub-multi-product", "files", "acme-hub")
+EVALS = os.path.join(ROOT, "evals")
+PSOC6 = os.path.join(EVALS, "review", "psoc6-mqtt-sensor-release", "files", "psoc6-mqtt-sensor")
+ACME = os.path.join(EVALS, "oss", "acme-hub-multi-product", "files", "acme-hub")
 
 REQUIRED_TOOLS = [t for t in os.environ.get("FW_TEST_REQUIRE_TOOLS", "").split(",") if t.strip()]
 REQUIRE_SCANCODE = os.environ.get("FW_TEST_REQUIRE_SCANCODE") == "1"
@@ -103,12 +104,20 @@ class PluginLayout(unittest.TestCase):
             py_compile.compile(s, doraise=True, cfile=os.path.join(tempfile.gettempdir(), "fwplugin-compile.pyc"))
             self.assertIn("sys.version_info < (3, 8)", read(s), "missing Python 3.8 guard: " + s)
 
+    def test_no_evals_or_fixtures_inside_plugin(self):
+        """Eval fixtures carry planted secrets and deliberately bad code; they live in evals/ at the repo root
+        so an installed plugin never ships them."""
+        for base, dirs, files in os.walk(PLUGIN):
+            self.assertNotIn("evals", dirs, base)
+            for f in files:
+                p = os.path.join(base, f)
+                if f.endswith((".c", ".h", ".py", ".yml", ".json", ".txt", ".pem", ".key", ".der", ".crt")):
+                    self.assertNotRegex(read(p), r"BEGIN (RSA |EC )?PRIVATE KEY-----\s*\n\s*[A-Za-z0-9+/=]{20,}", p)
+
     def test_no_stale_skill_paths(self):
         """Nothing in the plugin may point at the old .claude/skills/<old-name> layout except the
         fix tracker's documented fallbacks."""
         for base, _, files in os.walk(SKILLS):
-            if "evals" in base.split(os.sep):
-                continue
             for f in files:
                 if not f.endswith((".md", ".py", ".yml")):
                     continue

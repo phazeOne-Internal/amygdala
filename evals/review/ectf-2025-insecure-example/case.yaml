@@ -1,0 +1,22 @@
+schema_version: "1.1"
+name: ectf-2025-insecure-example
+context:
+  scaffold_script: place-files.sh
+expected_outcome: |
+  Detects a bare-metal Analog Devices MAX78000 (MSDK: mxc_device.h, MXC_FLC, project.mk BOARD=FTHR_RevA, Cortex-M4)
+  with no RTOS, treats decoder/ as the first-party firmware and design/ as first-party host code, and treats tools/
+  (organiser-provided host tooling marked "do not modify") as out of scope or lower priority. Produces a RAG report
+  with an overall NOT READY verdict. Red findings include: the UART packet length (a uint16 from the host header) is
+  read straight into main()'s 100-byte uart_buf (read_packet / read_bytes), a stack overflow from the serial link;
+  frames carry no integrity or confidentiality (encoder.py packs channel, timestamp and frame in plaintext and
+  decode() forwards the bytes), so anyone with access to the link can decode any channel or inject frames;
+  subscription updates are accepted from anyone with no decoder_id check, MAC or signature, so an attacker can grant
+  themselves any channel; the timestamp is never checked against the subscription window or for monotonicity, so
+  out-of-window and replayed frames are decoded; frame_size = pkt_len - 12 underflows for short packets so
+  write_packet sends far beyond uart_buf (stack memory disclosure). Amber findings include: read_ack() returns
+  uint8_t so its -1 becomes 255 and every "< 0" check on it is dead; printf inside the flash controller ISR;
+  uart_init failure spins forever with no watchdog; subscription state erased and rewritten in flash without
+  power-loss protection; read_header blocks forever with no timeout; debug output and the obfuscated boot_flag()
+  blob shipped despite "TODO remove"; the secrets file is the placeholder "EXAMPLE". The crypto example (MD5 as a
+  hash, all-zero key) is compiled out by CRYPTO_EXAMPLE=0 and so is rated no higher than Amber. Reports the risks
+  without exploit payloads and does not treat the organiser host tools as device vulnerabilities.

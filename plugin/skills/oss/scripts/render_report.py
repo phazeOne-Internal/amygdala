@@ -25,6 +25,9 @@ import subprocess
 import webbrowser
 import sys
 
+if sys.version_info < (3, 8):
+    sys.exit("This script needs Python 3.8 or later (any interpreter on PATH is fine); found " + sys.version.split()[0])
+
 for _s in (sys.stdout, sys.stderr):  # Windows consoles default to cp1252; code snippets may not be ASCII
     try:
         _s.reconfigure(encoding="utf-8", errors="replace")
@@ -69,6 +72,9 @@ BRAND = {
     # "lightblue" = the phazeone.com "Who are we?" look (light blue body, grid motif, white cards).
     # "white" = plain white body. Everything else stays the same.
     "body_theme": "lightblue",
+    # True loads IBM Plex Mono from Google Fonts when the report is opened (the report's only external
+    # request). False makes the report fully offline; it then uses the system monospace font.
+    "web_font": True,
     "cta_heading": "Make use of our skillset today",
     "cta_text": ("We design and build IoT, embedded firmware and hardware products for startups, corporates "
                  "and FTSE100 organisations. If you would like help working through the findings in this "
@@ -93,6 +99,20 @@ LEGEND = {
     "amber": "Fix before release, or the engineering manager formally accepts the risk with a target date — plausible field failure, defence-in-depth gap, or undiagnosable failure mode.",
     "green": "Improve when convenient — maintainability, style, low-risk hardening.",
 }
+# Shown in an Acknowledgements section at the end of every report. Tools are credited by name only when
+# they ran for that report (from the "tools" list); the rest is the standing list. Edit freely.
+ACK_TOOLS = {   # tool name as it appears in findings.json "tools" -> credit line
+    "cppcheck": "Cppcheck",
+    "clang-tidy": "clang-tidy (LLVM project)",
+    "flawfinder": "Flawfinder (David A. Wheeler)",
+    "semgrep": "Semgrep",
+    "scancode": "ScanCode Toolkit (AboutCode)",
+    "scancode-toolkit": "ScanCode Toolkit (AboutCode)",
+    "osv": "OSV.dev (Google / OpenSSF) for third-party vulnerability records",
+}
+ACK_STANDARDS = ("MITRE CWE, SEI CERT C, MISRA C, ETSI EN 303 645, EN 18031, NIST IR 8425, the OWASP "
+                 "Agentic Skills Top 10, SPDX and CycloneDX")
+ACK_DESIGN = "IBM Plex Mono by IBM (SIL Open Font License 1.1)"
 MUST_FIX_HEADING = "Must fix before release"
 VERDICT_SUB = {   # {n} = open count; overridable per profile via report.verdict_sub
     "red": "{n} Red issue(s) must be fixed before this firmware ships.",
@@ -121,7 +141,7 @@ def apply_profile(d):
 
 
 CONFIDENCES = {"confirmed", "likely", "needs-verification"}
-# Fix-tracking status (set by the firmware-fix skill). Absent means "open".
+# Fix-tracking status (set by the firmware:fix skill). Absent means "open".
 STATUSES = {
     "open": "Open", "in_progress": "In progress", "fixed": "Fixed",
     "fixed_needs_hw": "Fixed in code, needs hardware test", "action_required": "Code fixed, human action required",
@@ -137,6 +157,8 @@ def status_of(f):
 def is_open(f):
     return status_of(f) not in RESOLVED
 EFFORTS = {"S", "M", "L"}
+ORIGINS = {"first-party", "third-party"}
+ORIGIN_LABEL = {"first-party": "Our code", "third-party": "Third-party component"}
 COVERAGE = {"reviewed", "partial", "not_reviewed"}
 TOOL_STATUS = {"ran", "not_available", "failed", "skipped"}
 
@@ -169,6 +191,8 @@ def validate(d):
             errs.append(f"{where}: confidence must be one of {sorted(CONFIDENCES)}")
         if f.get("effort") and f["effort"] not in EFFORTS:
             errs.append(f"{where}: effort must be S, M or L")
+        if f.get("origin") and f["origin"] not in ORIGINS:
+            errs.append(f"{f.get('id')}: origin must be one of {sorted(ORIGINS)}")
         loc = f.get("location")
         if not isinstance(loc, dict) or "file" not in loc:
             errs.append(f"{where}: location must be an object with 'file' (and 'line' int or null)")
@@ -307,6 +331,8 @@ details.f .body{padding:0 18px 14px}.body h4{margin:12px 0 4px;font-size:12px;te
 .st-fixed{background:var(--green-bg);color:var(--green);font-weight:600}.st-wont_fix,.st-deferred{background:var(--grey-bg)}
 .st-fixed_needs_hw,.st-action_required,.st-in_progress{background:var(--amber-bg);color:var(--amber);font-weight:600}
 details.f.resolved{opacity:.62}
+.card.ack p{font-size:13.5px;line-height:1.7;margin:0 0 6px;color:var(--muted)}.card.ack p:last-child{margin:0}
+.chip.origin{background:#fff7e6;color:#8a4b00;border:1px solid #f0c27a;font-weight:600}.origin-note{margin:10px 0 0;padding:8px 12px;border-left:4px solid #f0c27a;background:#fff7e6;font-size:13px;color:#5c3a00}
 .legend td:first-child{width:150px}.small{font-size:13px;color:var(--muted)}
 /* call to action + footer */
 .cta{background:linear-gradient(var(--blue-tint) 30%,var(--navy) 30%);padding:40px 0 60px;text-align:center}
@@ -358,6 +384,67 @@ apply();
 """
 
 
+# ---------------------------------------------------------------- Secret redaction
+# Reports are shared with managers, contractors and sometimes customers or regulators, so secret
+# values found in the reviewed code must not be copied into them. The reviewer is told to mask
+# values in findings.json; this pass is the safety net and runs over every string in the file.
+_PEM_BEGIN = re.compile(r"-----BEGIN [A-Z0-9 ]*(PRIVATE KEY|PRIVATE)[A-Z0-9 ]*-----")
+_PEM_END = re.compile(r"-----END [A-Z0-9 ]*PRIVATE[A-Z0-9 ]*-----")
+_CRED = re.compile(r"""(?ix)
+    ( (?:pass(?:word|wd|phrase)?|pwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|
+         psk|client[_-]?secret|auth[_-]?key|signing[_-]?key|encryption[_-]?key)
+      [A-Za-z0-9_]* \s* (?:=|:|\s) \s* \(? \s* ["'] )     # name, separator, opening quote
+    ( [^"'\n]{2,} )                                       # the value
+    ( ["'] )""")
+_AWS = re.compile(r"\b(AKIA|ASIA)[0-9A-Z]{16}\b")
+_BEARER = re.compile(r"(?i)\b(bearer\s+)[A-Za-z0-9._\-]{8,}")
+_REDACTIONS = 0
+
+
+def _mask(v):
+    v = v.strip()
+    return (v[:2] + "…") if len(v) > 4 else "…"
+
+
+def redact_text(text):
+    """Mask private key material and quoted credential values in a block of text."""
+    global _REDACTIONS
+    out, in_key = [], False
+    for line in str(text).split("\n"):
+        if in_key:
+            if _PEM_END.search(line):
+                in_key = False
+                out.append(line)
+            # key body lines are dropped
+            continue
+        if _PEM_BEGIN.search(line) and not _PEM_END.search(line):
+            in_key = True
+            _REDACTIONS += 1
+            out.append(line)
+            out.append("[private key material redacted]")
+            continue
+        n0 = _REDACTIONS
+        line, c = _CRED.subn(lambda m: m.group(1) + _mask(m.group(2)) + m.group(3), line)
+        _REDACTIONS += c
+        line, c = _AWS.subn(lambda m: m.group(1) + "…[redacted]", line)
+        _REDACTIONS += c
+        line, c = _BEARER.subn(lambda m: m.group(1) + "…[redacted]", line)
+        _REDACTIONS += c
+        out.append(line)
+    return "\n".join(out)
+
+
+def redact_tree(obj):
+    """Apply redact_text to every string in a loaded findings.json structure."""
+    if isinstance(obj, str):
+        return redact_text(obj)
+    if isinstance(obj, list):
+        return [redact_tree(x) for x in obj]
+    if isinstance(obj, dict):
+        return {k: redact_tree(v) for k, v in obj.items()}
+    return obj
+
+
 def e(s):
     return html.escape(str(s if s is not None else ""))
 
@@ -371,13 +458,35 @@ def badge(r):
 
 
 def h2(text, anchor=None):
-    """Section heading in the phazeone.com style: first word carries the green accent."""
-    words = str(text).split(" ")
+    """Section heading: bold uppercase navy, single colour."""
     tag = f"<h2 id='{e(anchor)}'>" if anchor else "<h2>"
-    for i, w in enumerate(words):
-        if any(ch.isalpha() for ch in w):
-            return tag + " ".join(f"<span class='accent'>{e(x)}</span>" if j == i else e(x) for j, x in enumerate(words)) + "</h2>"
     return f"{tag}{e(text)}</h2>"
+
+
+def acknowledgements(d):
+    """Credit lines for the tools that ran, the standards drawn on, and the typeface."""
+    ran = []
+    for t in d.get("tools", []) or []:
+        name = str(t.get("name", "")).lower()
+        if t.get("status") != "ran":
+            continue
+        for key, credit in ACK_TOOLS.items():
+            if key in name and credit not in ran:   # "ScanCode Toolkit 32.5.0" matches "scancode"
+                ran.append(credit)
+    lines = [
+        (f"Analysis tools used for this report: {', '.join(ran)}." if ran
+         else "No external analysis tools were available for this report; findings come from code reading alone."),
+        f"Classification, checklists and regulatory mapping draw on {ACK_STANDARDS}.",
+        f"Typeface: {ACK_DESIGN}.",
+        f"Produced with the {BRAND['name']} {TITLE.lower()} skill for Claude Code. Our thanks to the maintainers of every project above.",
+    ]
+    return lines
+
+
+def generated_stamp():
+    """When this render ran, in local time with the zone, e.g. 2026-11-20 10:42 GMT (UTC+0000)."""
+    now = datetime.datetime.now().astimezone()
+    return now.strftime("%Y-%m-%d %H:%M %Z (UTC%z)")
 
 
 def render_html(d, findings, counts, verdict, score):
@@ -389,9 +498,10 @@ def render_html(d, findings, counts, verdict, score):
     a = out.append
     a(f"<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
       f"<title>{e(TITLE)} — {e(p['name'])} | {e(BRAND['name'])}</title>"
-      "<link rel='preconnect' href='https://fonts.googleapis.com'><link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>"
-      "<link rel='stylesheet' href='https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400&display=swap'>"
-      f"<style>{CSS}</style></head><body class='{e(BRAND.get('body_theme', 'lightblue'))}'>")
+      + (("<link rel='preconnect' href='https://fonts.googleapis.com'><link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>"
+          "<link rel='stylesheet' href='https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400&display=swap'>")
+         if BRAND.get("web_font", True) else "")
+      + f"<style>{CSS}</style></head><body class='{e(BRAND.get('body_theme', 'lightblue'))}'>")
     contact = e(BRAND["contact_url"])
     a(f"<header class='site'><div class='wrap bar'>"
       f"<a class='logo' href='{e(BRAND['url'])}' target='_blank' rel='noopener' title='{e(BRAND['tagline'])}'>"
@@ -402,6 +512,7 @@ def render_html(d, findings, counts, verdict, score):
     a(f"<section class='hero'><div class='wrap'>"
       f"<h1>{e(TITLE)} <span class='accent'>{e(p['name'])}</span></h1><div class='meta'>")
     a(f"<div><b>Date</b><span class='v'>{e(p['review_date'])}</span></div>")
+    a(f"<div><b>Generated</b><span class='v'>{e(generated_stamp())}</span></div>")
     if p.get("version"):
         a(f"<div><b>Version</b><span class='v'>{e(p['version'])}</span></div>")
     if p.get("reviewer"):
@@ -445,7 +556,9 @@ def render_html(d, findings, counts, verdict, score):
     if reds:
         a("" + h2("🔴 " + MUST_FIX_HEADING) + "<table><tr><th>ID</th><th>Issue</th><th>Area</th><th>Location</th><th>Effort</th></tr>")
         for f in reds:
-            a(f"<tr><td><a href='#{e(f['id'])}'><b>{e(f['id'])}</b></a></td><td>{e(f['title'])}<div class='small'>{e(f['impact'])}</div></td>"
+            a(f"<tr><td><a href='#{e(f['id'])}'><b>{e(f['id'])}</b></a></td><td>{e(f['title'])}"
+              + ("<span class='chip origin' style='margin-left:6px'>Third-party component</span>" if f.get('origin') == 'third-party' else "")
+              + f"<div class='small'>{e(f['impact'])}</div></td>"
               f"<td>{e(CAT_LABEL[f['category']])}</td><td class='loc'>{e(loc_str(f.get('location')))}</td><td>{e(f.get('effort', ''))}</td></tr>")
         a("</table>")
 
@@ -461,6 +574,7 @@ def render_html(d, findings, counts, verdict, score):
           f"<summary><span class='id'>{e(f['id'])}</span>{badge(f['rag'])}<span class='t'>{e(f['title'])}</span>"
           f"<span class='chip'>{e(CAT_LABEL[f['category']])}</span><span class='loc'>{e(loc_str(f.get('location')))}</span>"
           + (f"<span class='chip st-{e(status_of(f))}'>{e(STATUSES[status_of(f)])}</span>" if f.get('status') else "")
+          + (f"<span class='chip origin'>{e(ORIGIN_LABEL['third-party'])}</span>" if f.get('origin') == 'third-party' else "")
           + "</summary><div class='body'>")
         res = f.get("resolution") or {}
         if f.get("status") and (res.get("note") or res.get("commit")):
@@ -470,6 +584,9 @@ def render_html(d, findings, counts, verdict, score):
         a(f"<div><span class='chip'>Confidence: {e(f['confidence'])}</span>"
           + (f"<span class='chip'>Effort: {e(f['effort'])}</span>" if f.get("effort") else "")
           + "".join(f"<span class='chip'>{e(r)}</span>" for r in f.get("references", [])) + "</div>")
+        if f.get("origin") == "third-party":
+            a("<p class='origin-note'>Third-party component: a published vulnerability or defect in a library this product uses, "
+              "not in the code under review. The description states whether it is compiled in and reachable here.</p>")
         a("<h4>What's wrong</h4>" + para(f["description"]))
         a("<h4>Field impact</h4>" + para(f["impact"]))
         if f.get("evidence"):
@@ -496,6 +613,7 @@ def render_html(d, findings, counts, verdict, score):
       "<tr><td>" + badge("partial") + "</td><td>Area partly reviewed; no issues found in the part reviewed.</td></tr>"
       "<tr><td>" + badge("grey") + "</td><td>Area not reviewed — absence of findings is not evidence of quality.</td></tr></table>")
     a(f"<p class='small'>{e(DISCLAIMER)}</p>")
+    a(h2("Acknowledgements") + "<div class='card ack'>" + "".join(f"<p>{e(x)}</p>" for x in acknowledgements(d)) + "</div>")
     a("</div></main>")
     # Closing call to action and branded footer
     head_words = BRAND["cta_heading"].split()
@@ -531,7 +649,7 @@ def render_md(d, findings, counts, verdict, score):
     L = []
     a = L.append
     a(f"# {TITLE} — {p['name']}\n")
-    meta = [f"**Date:** {p['review_date']}"]
+    meta = [f"**Date:** {p['review_date']}", f"**Generated:** {generated_stamp()}"]
     if p.get("version"):
         meta.append(f"**Version:** {p['version']}")
     if p.get("reviewer"):
@@ -579,7 +697,12 @@ def render_md(d, findings, counts, verdict, score):
                 line.append(f"**Effort:** {f['effort']}")
             if f.get("status"):
                 line.append(f"**Status:** {STATUSES[status_of(f)]}")
+            if f.get("origin") == "third-party":
+                line.append("**Origin:** Third-party component")
             a(" · ".join(line) + "\n")
+            if f.get("origin") == "third-party":
+                a("> Third-party component: a published vulnerability or defect in a library this product uses, not in the "
+                  "code under review. The description states whether it is compiled in and reachable here.\n")
             if f.get("references"):
                 a("**References:** " + ", ".join(f["references"]) + "\n")
             a(f"**What's wrong.** {f['description']}\n")
@@ -603,6 +726,7 @@ def render_md(d, findings, counts, verdict, score):
     a(f"**RAG key:** 🔴 Red — {RAG_MEANING['red']} · 🟠 Amber — {RAG_MEANING['amber']} · "
       f"🟢 Green — {RAG_MEANING['green']} · 🟡 Partial — partly reviewed, nothing found · ⚪ Not assessed — not reviewed.\n")
     a(f"_{DISCLAIMER}_\n")
+    a("## Acknowledgements\n\n" + "\n".join(f"- {x}" for x in acknowledgements(d)) + "\n")
     a(f"---\nPrepared by **{BRAND['name']}** — {BRAND['tagline']}. {BRAND['url']} · "
       f"Need help with these findings? [Get in touch]({BRAND['contact_url']}) · {BRAND['phone']} · {BRAND['email']}\n")
     return "\n".join(L)
@@ -611,11 +735,12 @@ def render_md(d, findings, counts, verdict, score):
 def write_csv(path, findings):
     with open(path, "w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
-        w.writerow(["ID", "RAG", "Area", "Title", "File", "Line", "Confidence", "Effort", "Impact",
+        w.writerow(["ID", "RAG", "Area", "Origin", "Title", "File", "Line", "Confidence", "Effort", "Impact",
                     "Recommendation", "References", "Status", "Owner", "Resolution", "Commit"])
         for f in findings:
             loc = f.get("location") or {}
-            w.writerow([f["id"], f["rag"].upper(), CAT_LABEL[f["category"]], f["title"], loc.get("file", ""),
+            w.writerow([f["id"], f["rag"].upper(), CAT_LABEL[f["category"]], ORIGIN_LABEL.get(f.get("origin") or "first-party", "Our code"),
+                        f["title"], loc.get("file", ""),
                         loc.get("line") or "", f["confidence"], f.get("effort", ""), f["impact"],
                         f["recommendation"], "; ".join(f.get("references", [])), STATUSES[status_of(f)], "",
                         (f.get("resolution") or {}).get("note", ""), (f.get("resolution") or {}).get("commit", "")])
@@ -709,6 +834,9 @@ def main():
         for x in errs:
             print("  -", x, file=sys.stderr)
         sys.exit(1)
+    d = redact_tree(d)
+    if _REDACTIONS:
+        print(f"redacted {_REDACTIONS} secret value(s) in report text (private keys, quoted credentials, tokens)")
     out = args.out_dir or os.path.dirname(os.path.abspath(args.findings))
     os.makedirs(out, exist_ok=True)
     findings, counts, verdict, score = compute(d)

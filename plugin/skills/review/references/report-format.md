@@ -31,8 +31,8 @@ Each **area** in the scorecard takes the worst rating of its findings. An area w
     "name": "Smart Thermostat FW",
     "repo_path": "/path/to/repo",
     "version": "v1.4.2 or git commit if known",
-    "review_date": "2026-11-19",
-    "reviewer": "Claude (firmware-review skill)",
+    "review_date": "2026-11-19 14:05",
+    "reviewer": "Claude (firmware:review skill)",
     "platform": {
       "summary": "Infineon PSoC 6 (CY8C624ABZI) · ModusToolbox 3.x · FreeRTOS 10.5 · Wi-Fi (AIROC CYW43012) · MQTT/TLS to AWS IoT",
       "detection_confidence": "high",
@@ -71,6 +71,7 @@ Each **area** in the scorecard takes the worst rating of its findings. An area w
       "impact": "Concrete field scenario: trigger → what the customer/attacker gets.",
       "recommendation": "Specific fix, optionally with a short code sketch, and how to test it.",
       "effort": "S",
+      "origin": "first-party",
       "references": ["CWE-121", "ETSI EN 303 645 5.13", "EU CRA Annex I"]
     }
   ],
@@ -80,6 +81,7 @@ Each **area** in the scorecard takes the worst rating of its findings. An area w
 
 ### Field rules
 
+- `review_date`: the date **and time** the review was run, local time, `YYYY-MM-DD HH:MM` (read the clock when you start writing findings; don't guess). The renderer adds its own `Generated` stamp with the time zone on every render, so a re-render by the fix skill shows when the report was last produced.
 - `id`: `FW-001`, `FW-002`… Number in the order they will be displayed is not required — the script sorts by RAG then category.
 - `rag`: `red` | `amber` | `green`.
 - `category`: one of `memory-safety`, `security`, `secure-boot-ota`, `robustness`, `concurrency`, `hardware-power`, `dependencies`, `field-readiness`, `regulatory`, `code-quality`.
@@ -89,6 +91,7 @@ Each **area** in the scorecard takes the worst rating of its findings. An area w
 - `effort`: `S` (< 1 day), `M` (1–5 days), `L` (> 1 week / design change).
 - `coverage[].area`: same values as `category`. Include all ten areas, so the scorecard is complete. `status`: `reviewed` | `partial` | `not_reviewed`.
 - `tools[].status`: `ran` | `not_available` | `failed` | `skipped`.
+- `origin` (optional): `first-party` (default) for defects in the code under review, or `third-party` for a published vulnerability or defect in a dependency the product links. Third-party findings are labelled as such in every output so readers can tell "our code is wrong" from "a library we use has a known issue". Use `third-party` for OSV.dev results and for any other advisory-based finding, and state in the description whether the affected feature is compiled in and reachable.
 - Optional fields: `other_locations`, `references`, `next_steps`, `project.version`, `project.platform.notes`.
 
 The script exits non-zero and prints the problems if the JSON is invalid — fix and re-run.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Track fix progress in a firmware-review findings.json. Cross-platform, no dependencies.
+"""Track fix progress in a firmware:review findings.json. Cross-platform, no dependencies.
 
   python fix_tracker.py <findings.json> plan
         Ordered work list (Red -> Amber -> Green, then area, then ID) of findings not yet resolved,
@@ -13,7 +13,7 @@
         wont_fix and deferred require --note (who decided, and why). Keeps a backup findings.json.bak once.
 
   python fix_tracker.py <findings.json> render
-        Re-render report.html / report.md / findings.csv using the firmware-review skill's renderer,
+        Re-render report.html / report.md / findings.csv using the firmware:review skill's renderer,
         so the manager's report shows fix progress.
 
   python fix_tracker.py <findings.json> summary
@@ -26,6 +26,9 @@ import os
 import shutil
 import subprocess
 import sys
+
+if sys.version_info < (3, 8):
+    sys.exit("This script needs Python 3.8 or later (any interpreter on PATH is fine); found " + sys.version.split()[0])
 
 for _s in (sys.stdout, sys.stderr):
     try:
@@ -82,7 +85,8 @@ def kind(f):
 def find_renderer(findings_path):
     here = os.path.dirname(os.path.abspath(__file__))
     candidates = [
-        os.path.join(here, "..", "..", "firmware-review", "scripts", "render_report.py"),      # sibling skill
+        os.path.join(here, "..", "..", "review", "scripts", "render_report.py"),               # sibling skill (firmware plugin)
+        os.path.join(here, "..", "..", "firmware-review", "scripts", "render_report.py"),      # sibling skill (standalone copy)
         os.path.join(os.getcwd(), ".claude", "skills", "firmware-review", "scripts", "render_report.py"),
         os.path.join(os.path.expanduser("~"), ".claude", "skills", "firmware-review", "scripts", "render_report.py"),
     ]
@@ -145,7 +149,7 @@ def main():
     elif args.cmd == "render":
         r = find_renderer(path)
         if not r:
-            sys.exit("could not find firmware-review/scripts/render_report.py (install the firmware-review skill)")
+            sys.exit("could not find the review skill's scripts/render_report.py (install the firmware plugin)")
         rc = subprocess.run([sys.executable, r, path, "--out-dir", os.path.dirname(path)]).returncode
         sys.exit(rc)
     elif args.cmd == "summary":

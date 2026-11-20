@@ -13,4 +13,4 @@ __pycache__/
 firmware-review-workspace/
 
 # NOTE: do not add a bare "firmware-review/" pattern here: it would also match
-# .claude/skills/firmware-review/ and silently drop the skill from the repo.
+# the review skill's default output folder name; the skills themselves live in plugin/skills/.

@@ -1,0 +1,10 @@
+{
+  "name": "firmware",
+  "description": "Firmware code review from ./phazeOne: RAG-rated firmware review, open-source licence review and guided fixing of review findings for embedded / IoT products",
+  "version": "0.1.0",
+  "author": {
+    "name": "./phazeOne",
+    "email": "hello@phazeone.com",
+    "url": "https://www.phazeone.com"
+  }
+}

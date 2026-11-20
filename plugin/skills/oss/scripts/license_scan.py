@@ -24,6 +24,9 @@ import subprocess
 import sys
 from collections import Counter, defaultdict
 
+if sys.version_info < (3, 8):
+    sys.exit("This script needs Python 3.8 or later (any interpreter on PATH is fine); found " + sys.version.split()[0])
+
 for _s in (sys.stdout, sys.stderr):
     try:
         _s.reconfigure(encoding="utf-8", errors="replace")

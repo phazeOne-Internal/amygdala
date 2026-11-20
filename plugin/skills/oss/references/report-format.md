@@ -1,6 +1,6 @@
 # Licence report: findings.json for the shared renderer
 
-`scripts/render_report.py` is the same renderer the firmware-review skill uses. It turns `findings.json` into `report.html` (legal/management), `report.md` (developers) and `findings.csv` (tracking). The licence review supplies its own title, categories and verdict wording through the `report` object below. **Copy this block verbatim** into every licence `findings.json`.
+`scripts/render_report.py` is the same renderer the firmware:review skill uses. It turns `findings.json` into `report.html` (legal/management), `report.md` (developers) and `findings.csv` (tracking). The licence review supplies its own title, categories and verdict wording through the `report` object below. **Copy this block verbatim** into every licence `findings.json`.
 
 ```json
 "report": {

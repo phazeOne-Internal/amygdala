@@ -1,0 +1,15 @@
+{
+  "name": "phazeone-firmware",
+  "description": "./phazeOne firmware code review plugins",
+  "owner": {
+    "name": "./phazeOne",
+    "email": "hello@phazeone.com"
+  },
+  "plugins": [
+    {
+      "name": "firmware",
+      "source": "./plugin",
+      "description": "Firmware review, OSS licence review and guided fixing for embedded / IoT firmware"
+    }
+  ]
+}

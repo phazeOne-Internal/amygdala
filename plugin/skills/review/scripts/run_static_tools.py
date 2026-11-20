@@ -181,10 +181,12 @@ _FOUND = {}
 def tool_candidates(name):
     t = TOOLS[name]
     cands = []
-    for exe in t["exe"]:
-        p = shutil.which(exe)
-        if p:
-            cands.append(p)
+    # every PATH entry, not just the first hit: the first one may be a stub (see cppcheck_works)
+    for d in os.environ.get("PATH", "").split(os.pathsep):
+        for exe in t["exe"]:
+            p = shutil.which(exe, path=d) if d else None
+            if p:
+                cands.append(p)
     cands += [p for p in t["extra_paths"].get(OS, []) if os.path.isfile(p)]
     for d in user_script_dirs():
         for exe in t["exe"]:

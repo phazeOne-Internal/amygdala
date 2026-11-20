@@ -8,5 +8,6 @@ expected_outcome: |
   Release so the TRNG is never initialised; zero_cross_isr calling relay_apply which blocks on a mutex in ISR context.
   Also: off-by-one payload[len] write at len == MAX_PAYLOAD; uninitialised status buffer used for non-status commands;
   uncapped reconnect backoff overflow; non-atomic config save / static cfg never loaded so saves clobber fields; torn
-  64-bit energy counter; replay window after reboot / non-constant-time HMAC compare. Safe patterns (terminated strncpy,
+  64-bit energy counter; replay window after reboot / non-constant-time HMAC compare. Code quality: the relay driver
+  (source/drivers/) depends upward on app code (config_load, wdt_checkin), Green/Amber with a callback/queue fix. Safe patterns (terminated strncpy,
   strcpy of a literal, wrap-safe tick subtraction, supervisor watchdog, rare config writes) are not rated Red.

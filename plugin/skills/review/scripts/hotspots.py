@@ -150,6 +150,93 @@ CALL_SKIP = {"if", "for", "while", "switch", "return", "sizeof", "defined"}
 FUNC_DEF_RX = re.compile(r"^[ \t]*(?:static\s+)?(?:inline\s+)?(?:void|int|uint32_t|bool)\s+\*?(\w+)\s*\([^;{)]*\)\s*\{", re.M)
 
 
+# ---- Layering (architecture conformance) ----------------------------------------------------------
+# Layers are inferred from directory names first, then from file-name conventions (weaker evidence), and can be
+# forced with --layer lower=<path-prefix> / --layer upper=<path-prefix>. Dependencies must point downward:
+# application -> services -> drivers/HAL. A driver that includes an application header or calls an application
+# function is an upward dependency; application code that writes peripheral registers directly bypasses the driver.
+LAYER_LOWER_DIRS = {"drivers", "driver", "drv", "hal", "bsp", "board", "boards", "platform", "mcu", "soc", "periph",
+                    "peripherals", "port", "ports", "arch", "lowlevel", "low_level"}
+LAYER_UPPER_DIRS = {"app", "apps", "application", "business", "logic", "services", "service", "cloud", "ui",
+                    "features", "feature", "usecases", "domain"}
+LAYER_LOWER_FILE_RX = re.compile(r"(?i)^(drv|hal|bsp)_|_(driver|drv|hal|bsp)$")
+LAYER_UPPER_FILE_RX = re.compile(r"(?i)^(app|cloud|service)_|_(app|service)$")
+LAYER_RULES = {
+    "layer-upward-include": ("code-quality", "Lower layer (driver/HAL/BSP) includes an application-layer header"),
+    "layer-upward-call": ("code-quality", "Lower layer (driver/HAL/BSP) calls a function defined in the application layer"),
+    "layer-register-access-in-app": ("code-quality", "Application-layer code writes peripheral registers directly (bypasses the driver layer)"),
+}
+INCLUDE_RX = re.compile(r'^[ \t]*#[ \t]*include[ \t]*"([^"]+)"', re.M)
+REGISTER_WRITE_RX = re.compile(r"\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*\s*->\s*[A-Z][A-Z0-9_]*\s*(?:\|=|&=|\^=|=(?!=))|"
+                               r"\*\s*\(\s*volatile\s+u?int(?:8|16|32|64)_t\s*\*\s*\)\s*0x[0-9A-Fa-f]+")
+
+
+def layer_of(rel, overrides):
+    """-> (layer, basis) with layer in {'lower','upper',None}."""
+    low = rel.lower()
+    for layer, prefix in overrides:
+        if low.startswith(prefix):
+            return layer, "override"
+    parts = low.split("/")
+    dirs, stem = parts[:-1], os.path.splitext(parts[-1])[0]
+    if any(d in LAYER_LOWER_DIRS for d in dirs):
+        return "lower", "directory"
+    if any(d in LAYER_UPPER_DIRS for d in dirs):
+        return "upper", "directory"
+    if LAYER_LOWER_FILE_RX.search(stem):
+        return "lower", "file name"
+    if LAYER_UPPER_FILE_RX.search(stem):
+        return "upper", "file name"
+    return None, None
+
+
+def layering_leads(loaded, overrides, max_per_rule):
+    """Upward includes/calls from lower-layer files and direct register writes in upper-layer files."""
+    layers = {rel: layer_of(rel, overrides) for rel, kind, _, _ in loaded if kind == "src"}
+    lower = sorted(r for r, (l, _) in layers.items() if l == "lower")
+    upper = sorted(r for r, (l, _) in layers.items() if l == "upper")
+    info = {"lower": lower, "upper": upper,
+            "basis": sorted({b for _, b in layers.values() if b})}
+    hits, counts = defaultdict(list), defaultdict(int)
+    if not lower or not upper:
+        info["note"] = ("layers not inferable: no driver/HAL/BSP and application directories (or file-name conventions) "
+                        "found; pass --layer lower=<path> --layer upper=<path> to set them")
+        return info, hits, counts
+    text_of = {rel: text for rel, kind, _, text in loaded if kind == "src"}
+    lines_of = {rel: lines for rel, kind, lines, _ in loaded if kind == "src"}
+    upper_headers = {os.path.basename(r): r for r in upper if r.endswith((".h", ".hpp"))}
+    upper_funcs = {}
+    for r in upper:
+        if r.endswith((".h", ".hpp")):
+            continue
+        for name, _, _ in function_bodies(text_of[r]):
+            upper_funcs.setdefault(name, r)
+    def add(rid, rel, pos, **extra):
+        ln = text_of[rel].count("\n", 0, pos) + 1
+        counts[rid] += 1
+        if len(hits[rid]) < max_per_rule:
+            h = {"file": rel, "line": ln, "code": lines_of[rel][ln - 1].strip()[:160]}
+            h.update(extra)
+            hits[rid].append(h)
+    for rel in lower:
+        text = text_of[rel]
+        own = {name for name, _, _ in function_bodies(text)}
+        for m in INCLUDE_RX.finditer(text):
+            base = os.path.basename(m.group(1))
+            if base in upper_headers:
+                add("layer-upward-include", rel, m.start(), header=upper_headers[base])
+        for m in CALL_RX.finditer(text):
+            callee = m.group(1)
+            if callee in upper_funcs and callee not in own and callee not in CALL_SKIP:
+                add("layer-upward-call", rel, m.start(), callee=callee, defined_in=upper_funcs[callee])
+    for rel in upper:
+        if rel.endswith((".h", ".hpp")):
+            continue
+        for m in REGISTER_WRITE_RX.finditer(text_of[rel]):
+            add("layer-register-access-in-app", rel, m.start())
+    return info, hits, counts
+
+
 def registered_handlers(texts):
     names = set()
     for text in texts:
@@ -219,6 +306,8 @@ def main():
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--max-per-rule", type=int, default=40)
     ap.add_argument("--out", help="write output to this file (UTF-8) instead of stdout")
+    ap.add_argument("--layer", action="append", default=[], metavar="lower|upper=<path-prefix>",
+                    help="force a path prefix into the lower (driver/HAL) or upper (application) layer; repeatable")
     args = ap.parse_args()
     root = os.path.abspath(args.root)
     if args.out:
@@ -306,8 +395,20 @@ def main():
                 if len(hits[use]) < args.max_per_rule:
                     hits[use].append(hit)
 
+    overrides = []
+    for spec in args.layer:
+        layer, _, prefix = spec.partition("=")
+        if layer not in ("lower", "upper") or not prefix:
+            sys.exit(f"--layer expects lower=<path-prefix> or upper=<path-prefix>, got {spec!r}")
+        overrides.append((layer, prefix.strip("/").lower() + "/"))
+    layer_info, layer_hits, layer_counts = layering_leads(loaded, overrides, args.max_per_rule)
+    for rid in layer_hits:
+        hits[rid] = layer_hits[rid]
+        counts[rid] = layer_counts[rid]
+
     meta = {rid: (cat, desc) for rid, cat, desc, _, _ in RULES}
     meta[ISR_IN_HANDLER[0]] = (ISR_IN_HANDLER[1], ISR_IN_HANDLER[2])
+    meta.update(LAYER_RULES)
     absent = [rid for rid in PRESENCE_RULES if counts[rid] == 0]
 
     if args.json:
@@ -316,6 +417,7 @@ def main():
             "hits": {rid: {"category": meta[rid][0], "description": meta[rid][1], "count": counts[rid], "samples": hits[rid]} for rid in hits},
             "absent_presence_checks": absent, "key_files": key_files,
             "interrupt_handlers": [{"file": f, "line": l, "name": n} for f, l, n in isr_inventory],
+            "layers": layer_info,
         }, sys.stdout, indent=2)
         print()
         return
@@ -338,6 +440,15 @@ def main():
         for f, l, n in sorted(isr_inventory):
             print(f"- `{f}:{l}` — `{n}`")
         print()
+    print("## Layering (inferred from directory / file names; override with --layer)\n")
+    if layer_info.get("note"):
+        print(f"- {layer_info['note']}\n")
+    else:
+        print(f"- lower layer (driver/HAL/BSP), {len(layer_info['lower'])} file(s): " + ", ".join(f"`{f}`" for f in layer_info["lower"][:12]) + (" …" if len(layer_info["lower"]) > 12 else ""))
+        print(f"- upper layer (application), {len(layer_info['upper'])} file(s): " + ", ".join(f"`{f}`" for f in layer_info["upper"][:12]) + (" …" if len(layer_info["upper"]) > 12 else ""))
+        n = sum(counts[r] for r in LAYER_RULES)
+        print(f"- upward dependencies / direct register access found: {n}" + (" (listed under code-quality below)" if n else ""))
+    print()
     by_cat = defaultdict(list)
     for rid in hits:
         by_cat[meta[rid][0]].append(rid)
@@ -353,6 +464,10 @@ def main():
                 where = f" (in handler `{h['isr']}`)" if h.get("isr") else ""
                 if h.get("via"):
                     where = f" (in handler `{h['isr']}`, calls `{h['via']}` which blocks)"
+                if h.get("header"):
+                    where = f" (header lives in `{h['header']}`)"
+                if h.get("callee"):
+                    where = f" (`{h['callee']}` is defined in `{h['defined_in']}`)"
                 print(f"- `{h['file']}:{h['line']}` — `{h['code']}`{where}")
             if more > 0:
                 print(f"- … {more} more")

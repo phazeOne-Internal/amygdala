@@ -1,6 +1,4 @@
-<img src="docs/brand/amygdala-icon-128.png" width="96" align="right" alt="">
-
-# Amygdala Firmware Code Review Tool
+# <img src="docs/brand/amygdala-icon-128.png" width="44" align="top" alt=""> Amygdala Firmware Code Review Tool
 
 A Claude Code plugin from ./phazeOne that spots the dangers in embedded / IoT firmware before they reach the field: review the code, check its open-source licences, and work through the findings.
 

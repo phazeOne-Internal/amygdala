@@ -3,6 +3,6 @@
   "version": "3.0.0",
   "private": true,
   "license": "UNLICENSED",
-  "dependencies": { "react-native": "0.74.1", "rn-ble-gpl": "2.4.0", "highcharts": "11.4.0" },
+  "dependencies": { "react-native": "0.74.1", "rn-ble-gpl": "2.4.0", "highcharts": "11.4.9" },
   "devDependencies": { "eslint": "8.57.0" }
 }

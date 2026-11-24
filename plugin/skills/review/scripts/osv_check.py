@@ -95,6 +95,56 @@ def collect_mtb(root):
     return deps
 
 
+def default_remote_of(text):
+    """`remote:` under the `defaults:` block of a west.yml, read line by line (no regex over the block)."""
+    lines = text.splitlines()
+    for i, ln in enumerate(lines):
+        if ln.strip() != "defaults:":
+            continue
+        indent = len(ln) - len(ln.lstrip())
+        for sub in lines[i + 1:]:
+            if not sub.strip():
+                continue
+            if len(sub) - len(sub.lstrip()) <= indent:
+                break   # block over
+            key, _, val = sub.strip().partition(":")
+            if key == "remote" and val.strip():
+                return val.strip().strip("'\"")
+        break
+    return None
+
+
+def west_projects(text):
+    """The `projects:` list of a west.yml as dicts of scalar fields, read line by line: an entry starts at a
+    `- name:` line and takes the `key: value` lines indented deeper than its dash."""
+    lines = text.splitlines()
+    start = next((i for i, ln in enumerate(lines) if ln.strip() == "projects:"), None)
+    if start is None:
+        return []
+    block_indent = len(lines[start]) - len(lines[start].lstrip())
+    entries, cur, cur_indent = [], None, 0
+    for ln in lines[start + 1:]:
+        if not ln.strip():
+            continue
+        indent = len(ln) - len(ln.lstrip())
+        if indent <= block_indent:
+            break   # next top-level key: the projects list is over
+        body = ln.strip()
+        if body.startswith("- "):
+            if indent <= cur_indent or cur is None:
+                cur, cur_indent = {}, indent
+                entries.append(cur)
+                body = body[2:].strip()
+            else:
+                continue   # a nested list item (e.g. under `import:`), not a field we read
+        elif cur is None or indent <= cur_indent:
+            continue
+        key, sep, val = body.partition(":")
+        if sep and key.strip() and val.strip() and not val.strip().startswith(("{", "[")):
+            cur[key.strip()] = val.strip().strip("'\"")
+    return entries
+
+
 def collect_west(root):
     """Minimal west.yml reader (no YAML dependency): remotes url-base + projects name/remote/url/revision."""
     deps = []
@@ -106,24 +156,16 @@ def collect_west(root):
         remotes = {}
         for m in re.finditer(r"-\s*name:\s*([\w.-]+)\s*\n\s*url-base:\s*(\S+)", text):
             remotes[m.group(1)] = m.group(2)
-        default_remote = next(iter(remotes), None)
-        # horizontal whitespace only inside the block: \s could also eat newlines, which makes the
-        # repetition ambiguous and the match time explode on a long run of blank-ish lines
-        m = re.search(r"defaults:[ \t]*\n(?:[ \t]+.*\n)*?[ \t]+remote:[ \t]*([\w.-]+)", text)
-        if m:
-            default_remote = m.group(1)
-        proj_block = text.split("projects:", 1)[1] if "projects:" in text else ""
-        for pm in re.finditer(r"-\s*name:\s*([\w.-]+)((?:\n\s{4,}.*)*)", proj_block):
-            name, body = pm.group(1), pm.group(2)
-            url = re.search(r"\n\s+url:\s*(\S+)", body)
-            remote = re.search(r"\n\s+remote:\s*([\w.-]+)", body)
-            rev = re.search(r"\n\s+revision:\s*(\S+)", body)
-            repo_path = re.search(r"\n\s+repo-path:\s*(\S+)", body)
-            base = remotes.get(remote.group(1) if remote else default_remote, "")
-            repo = url.group(1) if url else (f"{base}/{repo_path.group(1) if repo_path else name}" if base else None)
+        default_remote = default_remote_of(text) or next(iter(remotes), None)
+        for entry in west_projects(text):
+            name = entry.get("name")
+            if not name:
+                continue
+            base = remotes.get(entry.get("remote") or default_remote, "")
+            repo = entry.get("url") or (f"{base}/{entry.get('repo-path') or name}" if base else None)
             if not repo:
                 continue
-            revision = rev.group(1) if rev else None
+            revision = entry.get("revision")
             deps.append({"name": name, "repo": norm_repo(repo), "tag": revision,
                          "source": os.path.relpath(os.path.join(dp, "west.yml"), root),
                          "note": None if revision and not re.fullmatch(r"[0-9a-f]{40}|main|master|develop", revision)

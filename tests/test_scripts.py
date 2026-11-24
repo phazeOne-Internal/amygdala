@@ -347,6 +347,35 @@ class ReviewScripts(TempDirTest):
         self.assertEqual((lay["lower_files"], lay["upper_files"]), (1, 1))
         self.assertEqual(lay["upward_calls"] + lay["upward_includes"] + lay["register_access_in_app"], 0)
 
+    def test_west_manifest_is_read_without_yaml(self):
+        """west.yml remotes, defaults and projects are read by a small line parser plus unambiguous regexes
+        (CodeQL flagged the earlier block regex for exponential backtracking)."""
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("osv", os.path.join(REVIEW, "osv_check.py"))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        root = self.path("zephyr-app")
+        os.makedirs(root)
+        write(os.path.join(root, "west.yml"), (
+            "manifest:\n  remotes:\n    - name: upstream\n      url-base: https://github.com/zephyrproject-rtos\n"
+            "    - name: vendor\n      url-base: https://github.com/example\n"
+            "  defaults:\n\n    revision: main\n    remote: vendor\n"
+            "  projects:\n    - name: zephyr\n      remote: upstream\n      revision: v3.7.0\n"
+            "    - name: mcuboot\n      repo-path: mcuboot-fork\n      revision: v2.1.0\n"
+            "    - name: hal_nordic\n      url: https://github.com/example/hal_nordic\n"))
+        self.assertEqual(mod.default_remote_of(open(os.path.join(root, "west.yml")).read()), "vendor")
+        deps = {d["name"]: d for d in mod.collect_west(root)}
+        self.assertEqual(deps["zephyr"]["repo"], mod.norm_repo("https://github.com/zephyrproject-rtos/zephyr"))
+        self.assertEqual(deps["zephyr"]["tag"], "v3.7.0")
+        self.assertEqual(deps["mcuboot"]["repo"], mod.norm_repo("https://github.com/example/mcuboot-fork"))
+        self.assertIn("hal_nordic", deps)
+        # a hostile manifest must not take noticeable time
+        import time
+        t0 = time.time()
+        mod.default_remote_of("defaults:\n" + "\t\t\t\t \n" * 20000)
+        mod.collect_west(root)
+        self.assertLess(time.time() - t0, 2)
+
     def test_osv_plan_mode_sends_nothing(self):
         out = self.path("osv")
         cp = run(os.path.join(REVIEW, "osv_check.py"), PSOC6,

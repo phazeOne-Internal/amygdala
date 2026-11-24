@@ -17,11 +17,13 @@ See what the output looks like before installing anything. Both skills were run 
 
 The developer Markdown, CSV, SBOM and notices files, and how the reports were produced, are in [docs/examples/ectf-2025](docs/examples/ectf-2025/README.md).
 
+The examples are real renderer output, and a test (`ExampleReports`) fails if they lag the renderer. After any change to `render_report.py`, re-render both with `FW_REVIEW_OPEN=0 python3 plugin/skills/review/scripts/render_report.py docs/examples/ectf-2025/<review|oss>/findings.json --out-dir docs/examples/ectf-2025/<review|oss>` and commit the result. A new section that needs data (as `maintainability` did) also needs that data produced from the fixture and added to the example `findings.json`, otherwise the public page never shows it.
+
 ## Requirements
 
 - Claude Code.
 - Python 3.8 or later on PATH as `python3` (macOS / Linux) or `py` / `python` (Windows). Every bundled script needs it. Each skill checks for it first and, if it is missing, shows the install command for your OS and asks before running it. On Windows use a python.org build or `winget install Python.Python.3.12`; the Microsoft Store stub is not enough.
-- Optional: cppcheck, clang-tidy, flawfinder, semgrep (review) and ScanCode Toolkit (oss). The skills detect what is installed, show the install commands for anything missing, and never install without a yes.
+- Optional: cppcheck, clang-tidy, flawfinder, semgrep and lizard (review) and ScanCode Toolkit (oss). The skills detect what is installed, show the install commands for anything missing, and never install without a yes. Lizard is the one to have even if you skip the rest: it measures function size and complexity for the report's Maintainability section and is a tiny pure-Python install.
 
 ## Install
 
@@ -59,7 +61,7 @@ docs/examples/                     example reports (served by GitHub Pages)
 tests/                             script test suite and its two sample findings files
 ```
 
-Scripts are plain Python 3 (3.8 or later) with no third-party dependencies and run on macOS, Linux and Windows. They run under whatever `python3` (or `py` on Windows) is on your PATH, including a toolchain's bundled interpreter such as PlatformIO's, ModusToolbox's or ESP-IDF's, and they never install anything into, or modify, the interpreter they run under. The one script that uses the network, the opt-in OSV.dev lookup, verifies TLS through the interpreter's CA bundle, certifi, or the operating system store, whichever is available. Static-analysis tools (cppcheck, clang-tidy, flawfinder, semgrep) are optional; the skill asks before installing anything.
+Scripts are plain Python 3 (3.8 or later) with no third-party dependencies and run on macOS, Linux and Windows. They run under whatever `python3` (or `py` on Windows) is on your PATH, including a toolchain's bundled interpreter such as PlatformIO's, ModusToolbox's or ESP-IDF's, and they never install anything into, or modify, the interpreter they run under. The one script that uses the network, the opt-in OSV.dev lookup, verifies TLS through the interpreter's CA bundle, certifi, or the operating system store, whichever is available. Static-analysis tools (cppcheck, clang-tidy, flawfinder, semgrep, lizard) are optional; the skill asks before installing anything.
 
 ## Using the skills
 
@@ -83,7 +85,7 @@ python -m unittest discover -s tests -v
 GitHub Actions (`.github/workflows/ci.yml`) runs it on every pull request and push to `main`:
 
 - the suite on Ubuntu, Windows and macOS with the oldest supported Python and the current one;
-- on each of the three, a job that installs cppcheck, flawfinder and semgrep using the exact commands `run_static_tools.py --check` prints for that operating system (`tests/install_tools.py`), then requires all three to run on the fixture, so the install advice the skill gives users is tested, not just typed;
+- on each of the three, a job that installs cppcheck, flawfinder, semgrep and lizard using the exact commands `run_static_tools.py --check` prints for that operating system (`tests/install_tools.py`), then requires all four to run on the fixture, so the install advice the skill gives users is tested, not just typed;
 - on each of the three, a job that installs ScanCode Toolkit with `install_scancode.py --yes` (including the libmagic prerequisite on Apple Silicon) and runs a real `--run-scancode` scan;
 - plugin and marketplace validation with `claude plugin validate`. The model-graded evals under `evals/` are not part of CI; run them locally with `claude plugin eval`.
 

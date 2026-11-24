@@ -169,7 +169,7 @@ Rate these mostly Green or Amber. Only raise to Red if the problem is itself pro
 |---|---|
 | Builds with warnings, or warnings suppressed; no `-Wall -Wextra` (or equivalent) | Amber |
 | Release build differs dangerously from debug (asserts removed with side effects inside them: `assert(init() == OK)`) | Red — the init call disappears in release |
-| Very long/complex functions (many hundreds of lines, deep nesting) in critical paths | Amber |
+| Very long/complex functions in critical paths. `run_static_tools.py` measures every function with lizard (cyclomatic complexity > 15, > 100 lines, > 5 parameters are listed as leads) and the report's Maintainability section shows the per-directory picture and a good / fair / poor band. Cite the numbers in the finding | Green for an isolated outlier; Amber when it is a parser, state machine or OTA path, or when the band is poor and the team is about to add features |
 | Magic numbers for timeouts, sizes, register values, protocol constants | Green |
 | Duplicated logic that has already diverged (one copy fixed, the other not) | Amber |
 | Dead code, `#if 0` blocks, commented-out code | Green |

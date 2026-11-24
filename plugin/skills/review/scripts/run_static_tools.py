@@ -13,8 +13,13 @@ Two modes:
 
 Usage:
   python run_static_tools.py <repo-root> --check
-  python run_static_tools.py <repo-root> --out-dir DIR [--tools cppcheck,clang-tidy,flawfinder,semgrep]
+  python run_static_tools.py <repo-root> --out-dir DIR [--tools cppcheck,clang-tidy,flawfinder,semgrep,lizard]
          [--exclude DIR ...] [--compile-db PATH] [--misra] [--timeout SECONDS] [--jobs N]
+         [--layer lower|upper=<path-prefix> ...]
+
+Also writes maintainability.json: function size / complexity metrics from lizard (per directory, worst
+functions, a good / fair / poor maintainability band) plus the layering check from hotspots.py, in the
+shape the report's "maintainability" section takes. Copy it into findings.json as-is.
 
 Leads are NOT findings: every one must be read in context before it goes in the report.
 Nothing is sent off the machine: semgrep runs with --metrics=off and only the bundled local rules.
@@ -117,7 +122,27 @@ TOOLS = {
                                              "to get semgrep coverage; the review continues without it."},
         "size": "medium (~200 MB)",
     },
+    "lizard": {
+        "purpose": "Function size and complexity metrics (lines, cyclomatic complexity, parameters) for every "
+                   "function, summarised per directory in the report's Maintainability section. Pure Python, no build "
+                   "setup, works on every platform.",
+        "exe": ["lizard"],
+        "extra_paths": {},
+        "install": {
+            "macos": ["python3 -m pip install --user lizard", "pipx install lizard"],
+            "linux": ["python3 -m pip install --user lizard", "pipx install lizard"],
+            "windows": ["py -m pip install --user lizard"],
+        },
+        "size": "tiny (pure Python)",
+    },
 }
+
+# A function over any of these is listed as a lead and counted against the directory it lives in. The values
+# are the common industry defaults (McCabe's 10-15 for complexity, ~100 lines, 5 parameters); they mark
+# functions that are hard to test and review, not functions that are wrong.
+LIZARD_THRESHOLDS = {"complexity": 15, "nloc": 100, "params": 5}
+WORST_FUNCTIONS = 15
+EXTRA = {}   # per-tool side output that is not a lead (lizard: the function metrics)
 
 
 def windows_pip():
@@ -438,7 +463,152 @@ def run_semgrep(path, root, srcs, incs, args):
     return leads, "ran", "bundled embedded-c rules, local only" + (f"; {len(errors)} parse error(s)" if errors else "")
 
 
-RUNNERS = {"cppcheck": run_cppcheck, "clang-tidy": run_clang_tidy, "flawfinder": run_flawfinder, "semgrep": run_semgrep}
+def run_lizard(path, root, srcs, incs, args):
+    if not srcs:
+        return [], "skipped", "no first-party C/C++ source files"
+    cmd = [path, "--csv", "-l", "cpp", root]
+    for name in sorted(getattr(args, "excludes_all", DEFAULT_EXCLUDES)):
+        cmd += ["-x", f"*/{name}/*"]
+    rc, out, err, fail = run(cmd, args.timeout, cwd=root)
+    if fail:
+        return [], "failed", fail
+    wanted = {os.path.normcase(os.path.abspath(s)) for s in srcs}
+    funcs = []
+    for row in csv.reader(io.StringIO(out)):
+        if len(row) < 11:
+            continue
+        try:
+            nloc, cyclo, tokens, params = int(row[0]), int(row[1]), int(row[2]), int(row[3])
+            start, end = int(row[9]), int(row[10])
+        except ValueError:
+            continue   # header or a line lizard printed that is not a record
+        f = row[6] if os.path.isabs(row[6]) else os.path.join(root, row[6])
+        if os.path.normcase(os.path.abspath(f)) not in wanted:
+            continue
+        funcs.append({"name": row[7], "file": rel(root, f), "line": start, "end_line": end,
+                      "nloc": nloc, "complexity": cyclo, "params": params, "tokens": tokens})
+    if not funcs and rc not in (0, None):
+        return [], "failed", f"lizard exit {rc}: {' '.join((err or out).split())[:200]}"
+    EXTRA["lizard"] = funcs
+    leads = []
+    for fn in funcs:
+        over = over_thresholds(fn)
+        if over:
+            leads.append({"tool": "lizard", "rule": "function-" + over[0], "severity": "metric",
+                          "file": fn["file"], "line": fn["line"], "message": metrics_text(fn)})
+    return leads, "ran", f"{len(funcs)} functions measured; {len(leads)} over thresholds {thresholds_text()}"
+
+
+def over_thresholds(fn):
+    """Which thresholds a function exceeds, as labels; empty when it is within all of them."""
+    t = LIZARD_THRESHOLDS
+    return [label for k, label in (("complexity", "complexity"), ("nloc", "length"), ("params", "parameters")) if fn[k] > t[k]]
+
+
+def thresholds_text():
+    t = LIZARD_THRESHOLDS
+    return f"(complexity > {t['complexity']}, > {t['nloc']} lines, > {t['params']} parameters)"
+
+
+def metrics_text(fn):
+    return f"{fn['name']}(): complexity {fn['complexity']}, {fn['nloc']} lines, {fn['params']} parameter(s) " + thresholds_text()
+
+
+def maintainability_band(functions, over, max_complexity):
+    """good / fair / poor from the share of functions over thresholds and the single worst function.
+    A heuristic to point the reader at where to look, not a certified metric; the basis is stated beside it."""
+    if not functions:
+        return "unknown", "no functions measured"
+    pct = 100.0 * over / functions
+    basis = f"{over} of {functions} functions ({pct:.0f}%) are over the size / complexity thresholds; worst complexity {max_complexity}"
+    if pct <= 5 and max_complexity < 30:
+        return "good", basis
+    if pct <= 15 and max_complexity < 60:
+        return "fair", basis
+    return "poor", basis
+
+
+def maintainability_metrics(funcs):
+    """Totals, per-directory table and worst functions, from lizard's per-function rows."""
+    if not funcs:
+        return None
+    dirs = {}
+    for fn in funcs:
+        d = os.path.dirname(fn["file"]) or "."
+        g = dirs.setdefault(d, {"path": d, "files": set(), "functions": 0, "nloc": 0, "complexity_sum": 0, "max_complexity": 0, "over_threshold": 0})
+        g["files"].add(fn["file"])
+        g["functions"] += 1
+        g["nloc"] += fn["nloc"]
+        g["complexity_sum"] += fn["complexity"]
+        g["max_complexity"] = max(g["max_complexity"], fn["complexity"])
+        g["over_threshold"] += 1 if over_thresholds(fn) else 0
+    by_dir = []
+    for g in sorted(dirs.values(), key=lambda g: (-g["over_threshold"], -g["max_complexity"], g["path"])):
+        by_dir.append({"path": g["path"], "files": len(g["files"]), "functions": g["functions"], "nloc": g["nloc"],
+                       "avg_complexity": round(g["complexity_sum"] / g["functions"], 1), "max_complexity": g["max_complexity"],
+                       "over_threshold": g["over_threshold"]})
+    n = len(funcs)
+    over = sum(1 for fn in funcs if over_thresholds(fn))
+    max_complexity = max(fn["complexity"] for fn in funcs)
+    ranked = sorted(funcs, key=lambda fn: (-fn["complexity"], -fn["nloc"], fn["file"], fn["line"]))
+    worst = [fn for fn in ranked if fn["complexity"] >= 5 or over_thresholds(fn)][:WORST_FUNCTIONS] or ranked[:5]
+    band, basis = maintainability_band(n, over, max_complexity)
+    return {
+        "thresholds": dict(LIZARD_THRESHOLDS),
+        "totals": {"files": len({fn["file"] for fn in funcs}), "functions": n, "nloc": sum(fn["nloc"] for fn in funcs),
+                   "avg_complexity": round(sum(fn["complexity"] for fn in funcs) / n, 1), "max_complexity": max_complexity,
+                   "avg_nloc": round(sum(fn["nloc"] for fn in funcs) / n, 1),
+                   "over_threshold": over, "pct_over": round(100.0 * over / n, 1)},
+        "by_directory": by_dir,
+        "worst_functions": [{"name": fn["name"], "file": fn["file"], "line": fn["line"], "nloc": fn["nloc"],
+                             "complexity": fn["complexity"], "params": fn["params"], "over": over_thresholds(fn)} for fn in worst],
+        "rating": band, "rating_basis": basis,
+    }
+
+
+def layering_summary(root, srcs, incs, overrides, max_samples=5):
+    """The hotspots.py layering check (driver code reaching up into application code, application code
+    writing registers) in summary form, so maintainability.json carries structure as well as size."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import hotspots  # noqa: E402  (sibling script; same bundled rules as the pattern scan)
+    files = list(srcs)
+    for d in incs:
+        try:
+            files += [os.path.join(d, f) for f in os.listdir(d) if os.path.splitext(f)[1] in HDR_EXT]
+        except OSError:
+            continue
+    loaded = []
+    for f in sorted(set(files)):
+        try:
+            with open(f, "r", encoding="utf-8", errors="replace") as fh:
+                lines = fh.readlines()
+        except OSError:
+            continue
+        loaded.append((rel(root, f), "src", lines, "".join(lines)))
+    info, hits, counts = hotspots.layering_leads(loaded, overrides, max_samples)
+    out = {"status": "not_inferable" if info.get("note") else "checked",
+           "lower_files": len(info["lower"]), "upper_files": len(info["upper"]), "basis": info.get("basis", []),
+           "upward_includes": counts.get("layer-upward-include", 0),
+           "upward_calls": counts.get("layer-upward-call", 0),
+           "register_access_in_app": counts.get("layer-register-access-in-app", 0),
+           "samples": {rid: hits[rid] for rid in hits}}
+    if info.get("note"):
+        out["note"] = info["note"]
+    return out
+
+
+def parse_layer_overrides(specs):
+    overrides = []
+    for spec in specs:
+        layer, _, prefix = spec.partition("=")
+        if layer not in ("lower", "upper") or not prefix:
+            sys.exit(f"--layer expects lower=<path-prefix> or upper=<path-prefix>, got {spec!r}")
+        overrides.append((layer, prefix.strip("/").lower() + "/"))
+    return overrides
+
+
+RUNNERS = {"cppcheck": run_cppcheck, "clang-tidy": run_clang_tidy, "flawfinder": run_flawfinder, "semgrep": run_semgrep,
+           "lizard": run_lizard}
 
 
 def check(root):
@@ -479,6 +649,8 @@ def main():
     ap.add_argument("--misra", action="store_true", help="also run cppcheck's MISRA addon (style guidance, noisy)")
     ap.add_argument("--timeout", type=int, default=900, help="per-tool (clang-tidy: per-file) timeout, seconds")
     ap.add_argument("--jobs", type=int, default=max(1, min(8, (os.cpu_count() or 2))))
+    ap.add_argument("--layer", action="append", default=[], metavar="lower|upper=<path-prefix>",
+                    help="force a path prefix into the lower (driver/HAL) or upper (application) layer for the layering check")
     args = ap.parse_args()
     root = os.path.abspath(args.root)
 
@@ -490,6 +662,7 @@ def main():
     out_dir = os.path.abspath(args.out_dir or os.path.join(root, "firmware-review"))
     os.makedirs(out_dir, exist_ok=True)
     excludes = DEFAULT_EXCLUDES | {e.strip("/\\").lower() for e in args.exclude}
+    args.excludes_all = excludes
     srcs, incs = first_party(root, excludes)
     wanted = [t.strip() for t in args.tools.split(",")] if args.tools else list(TOOLS)
 
@@ -515,8 +688,21 @@ def main():
         m["hits"].append({x: l.get(x) for x in ("tool", "rule", "severity", "cwe", "message")})
     ordered = sorted(merged.values(), key=lambda m: (-len({h["tool"] for h in m["hits"]}), m["file"], m["line"]))
 
+    # Maintainability: lizard's metrics (when it ran) plus the layering check, in the report's maintainability shape.
+    lz = next((s for s in status if s["name"] == "lizard"), None)
+    mt = {"tool": "lizard", "status": lz["status"] if lz else "skipped",
+              "notes": lz["notes"] if lz else "lizard not selected with --tools"}
+    metrics = maintainability_metrics(EXTRA.get("lizard", []))
+    if metrics:
+        mt.update(metrics)
+    else:
+        mt.update({"rating": "unknown", "rating_basis": "no function metrics: " + mt["notes"]})
+    mt["layering"] = layering_summary(root, srcs, incs, parse_layer_overrides(args.layer))
+    with open(os.path.join(out_dir, "maintainability.json"), "w", encoding="utf-8") as fh:
+        json.dump(mt, fh, indent=2)
+
     with open(os.path.join(out_dir, "static_leads.json"), "w", encoding="utf-8") as fh:
-        json.dump({"tools": status, "first_party_sources": len(srcs), "leads": ordered}, fh, indent=2)
+        json.dump({"tools": status, "first_party_sources": len(srcs), "leads": ordered, "maintainability": mt}, fh, indent=2)
     with open(os.path.join(out_dir, "static_leads.md"), "w", encoding="utf-8") as fh:
         fh.write(f"# Static analysis leads\n\n{len(srcs)} first-party source files. "
                  "**Leads, not findings — read each in context.** Lines flagged by several tools are listed first.\n\n")
@@ -530,9 +716,40 @@ def main():
             for h in m["hits"]:
                 cwe = f" CWE-{h['cwe']}" if h.get("cwe") and str(h["cwe"]).isdigit() else (f" {h['cwe']}" if h.get("cwe") else "")
                 fh.write(f"  - {h['tool']} `{h['rule']}` [{h['severity']}{cwe}] {h['message']}\n")
+        fh.write("\n## Maintainability\n\n")
+        fh.write(maintainability_md(mt))
     for s in status:
         print(f"{s['name']:<11} {s['status']:<14} {s['leads']:>4} leads  {s['notes'][:140]}")
     print(f"{len(ordered)} merged locations -> {os.path.join(out_dir, 'static_leads.md')}")
+    lay = mt["layering"]
+    print(f"maintainability: {mt['rating']} ({mt['rating_basis']}); layering {lay['status']}"
+          + (f": {lay['upward_includes']} upward include(s), {lay['upward_calls']} upward call(s), "
+             f"{lay['register_access_in_app']} register write(s) in application code" if lay["status"] == "checked" else "")
+          + f" -> {os.path.join(out_dir, 'maintainability.json')}")
+
+
+def maintainability_md(h):
+    L = []
+    L.append(f"Maintainability: **{h['rating']}** ({h['rating_basis']}). Metrics from lizard: {h['status']}, {h['notes']}.\n")
+    if h.get("totals"):
+        t = h["totals"]
+        L.append(f"{t['functions']} functions in {t['files']} files, {t['nloc']:,} lines of code; average complexity {t['avg_complexity']}, "
+                 f"max {t['max_complexity']}; {t['over_threshold']} ({t['pct_over']}%) over thresholds {thresholds_text()}.\n")
+        L.append("| Directory | Files | Functions | Lines | Avg complexity | Max complexity | Over threshold |\n|---|---|---|---|---|---|---|")
+        for d in h["by_directory"]:
+            L.append(f"| `{d['path']}` | {d['files']} | {d['functions']} | {d['nloc']:,} | {d['avg_complexity']} | {d['max_complexity']} | {d['over_threshold']} |")
+        L.append("\n| Function | Location | Lines | CCN | Params |\n|---|---|---|---|---|")
+        for w in h["worst_functions"]:
+            L.append(f"| `{w['name']}` | `{w['file']}:{w['line']}` | {w['nloc']} | {w['complexity']} | {w['params']} |")
+        L.append("")
+    lay = h["layering"]
+    if lay["status"] == "checked":
+        L.append(f"Layering ({', '.join(lay['basis']) or 'inferred'}; {lay['lower_files']} lower-layer and {lay['upper_files']} "
+                 f"application files): {lay['upward_includes']} upward include(s), {lay['upward_calls']} upward call(s), "
+                 f"{lay['register_access_in_app']} direct register write(s) in application code. Details in hotspots.md.\n")
+    else:
+        L.append(f"Layering: {lay.get('note', 'not checked')}\n")
+    return "\n".join(L) + "\n"
 
 
 if __name__ == "__main__":

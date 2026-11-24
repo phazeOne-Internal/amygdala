@@ -56,11 +56,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install cppcheck, flawfinder and semgrep using the commands run_static_tools.py --check prints
-        run: python tests/install_tools.py static cppcheck flawfinder semgrep
+      - name: Install cppcheck, flawfinder, semgrep and lizard using the commands run_static_tools.py --check prints
+        run: python tests/install_tools.py static cppcheck flawfinder semgrep lizard
       - name: Run the script test suite with the analysers required to run
         env:
-          FW_TEST_REQUIRE_TOOLS: cppcheck,flawfinder,semgrep
+          FW_TEST_REQUIRE_TOOLS: cppcheck,flawfinder,semgrep,lizard
           SEMGREP_SEND_METRICS: "off"
         run: python -m unittest discover -s tests -v
 

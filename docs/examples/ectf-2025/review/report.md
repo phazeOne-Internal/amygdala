@@ -1,6 +1,6 @@
 # Firmware review — 2025 eCTF insecure example decoder (MITRE reference design)
 
-**Date:** 2026-11-20 19:46 · **Generated:** 2026-11-20 19:50 GMT (UTC+0000) · **Version:** 2025 eCTF insecure example (reference design snapshot, Apache-2.0) · **Reviewer:** ./phazeOne amygdala:review  
+**Date:** 2026-11-20 19:46 · **Generated:** 2026-11-24 21:48 GMT (UTC+0000) · **Version:** 2025 eCTF insecure example (reference design snapshot, Apache-2.0) · **Reviewer:** ./phazeOne amygdala:review  
 **Platform:** Analog Devices MAX78000 (FTHR_RevA) · MSDK v2024_02 · bare-metal superloop, no RTOS · UART host link at 115200 baud · frames relayed from a TCP 'satellite' broadcast by host tooling (detection confidence: high)  
 **Scope:** 22 first-party files, ~1,982 lines in `decoder/src/`, `decoder/inc/`, `decoder/startup_firmware.S`, `decoder/firmware.ld`, `decoder/Makefile`, `decoder/project.mk`, `decoder/Dockerfile`, `design/ectf25_design/`
 
@@ -586,6 +586,41 @@ for (int i = 0; i < MAX_CHANNEL_COUNT; i++){
 
 **Recommendation.** Zero the array first (memset or = {0}) before setting the defaults.
 
+## Maintainability (code health)
+
+**GOOD** — Most functions are small and testable; keep it that way with a complexity gate in CI. 0 of 30 functions (0%) are over the size / complexity thresholds; worst complexity 9.
+
+_How hard this code is to change safely, measured rather than judged: function size and cyclomatic complexity per directory, and whether the driver and application layers stay apart. It is independent of the findings above: tidy code can hide a Red, and messy code can be correct today, but messy code is where the next defect is written._
+
+| Functions | Files | Lines of code | Avg complexity | Max complexity | Over thresholds |
+|---|---|---|---|---|---|
+| 30 | 5 | 361 | 3.4 | 9 | 0 (0.0%) |
+
+Thresholds: complexity > 15, > 100 lines, > 5 parameters. Functions over a threshold are hard to test completely and hard to review; they are leads, not defects.
+
+| Directory | Files | Functions | Lines | Avg complexity | Max complexity | Over thresholds |
+|---|---|---|---|---|---|---|
+| `decoder/src` | 5 | 30 | 361 | 3.4 | 9 | 0 |
+
+**Largest and most complex functions**
+
+| Function | Location | Lines | Complexity | Params | Over |
+|---|---|---|---|---|---|
+| `read_packet()` | `decoder/src/host_messaging.c:178` | 25 | 9 | 3 | — |
+| `write_hex()` | `decoder/src/host_messaging.c:106` | 21 | 8 | 3 | — |
+| `main()` | `decoder/src/decoder.c:373` | 40 | 7 | 0 | — |
+| `write_packet()` | `decoder/src/host_messaging.c:141` | 21 | 7 | 3 | — |
+| `update_subscription()` | `decoder/src/decoder.c:216` | 26 | 6 | 2 | — |
+| `encrypt_sym()` | `decoder/src/simple_crypto.c:35` | 15 | 6 | 4 | — |
+| `decrypt_sym()` | `decoder/src/simple_crypto.c:71` | 15 | 6 | 4 | — |
+| `write_bytes()` | `decoder/src/host_messaging.c:83` | 12 | 6 | 3 | — |
+| `init()` | `decoder/src/decoder.c:289` | 23 | 5 | 0 | — |
+| `read_bytes()` | `decoder/src/host_messaging.c:26` | 15 | 5 | 2 | — |
+| `is_subscribed()` | `decoder/src/decoder.c:143` | 11 | 5 | 1 | — |
+
+**Layering.** layers not inferable: no driver/HAL/BSP and application directories (or file-name conventions) found; pass --layer lower=<path> --layer upper=<path> to set them.
+
+
 ## Recommended next steps
 
 1. Fix the two parser Reds (FW-001, FW-002) first: they are small, local changes and make every other test meaningful.
@@ -605,6 +640,7 @@ for (int i = 0; i < MAX_CHANNEL_COUNT; i++){
 | flawfinder | ran | 2.0.20; min level 2; 5 leads (sprintf / memcpy), all with bounded sources; folded into FW-019 |
 | semgrep | ran | 1.186.0; bundled embedded-c rules, local only, metrics off; 6 leads (ISR printf became FW-007) |
 | OSV.dev dependency lookup | skipped | skipped (no consent): no user was available to approve sending dependency URLs to api.osv.dev; the plan found no machine-readable dependency manifests in any case |
+| lizard | ran | 30 functions measured; 0 over thresholds (complexity > 15, > 100 lines, > 5 parameters); see Maintainability |
 
 Excluded (vendored / generated): `tools/ (host test and harness tooling, light review only)`, `MSDK v2024_02 (not vendored; fetched at build time in the Dockerfile)`, `eCTF bootloader (not in repository)`. Third-party code was assessed for versions and configuration, not line-by-line.
 
@@ -614,7 +650,7 @@ _This is a static review of source code. It does not replace on-target testing, 
 
 ## Acknowledgements
 
-- Analysis tools used for this report: Cppcheck, Flawfinder (David A. Wheeler), Semgrep.
+- Analysis tools used for this report: Cppcheck, Flawfinder (David A. Wheeler), Semgrep, Lizard (Terry Yin) for function size and complexity metrics.
 - Classification, checklists and regulatory mapping draw on MITRE CWE, SEI CERT C, MISRA C, ETSI EN 303 645, EN 18031, NIST IR 8425, the OWASP Agentic Skills Top 10, SPDX and CycloneDX.
 - Typeface: IBM Plex Mono by IBM (SIL Open Font License 1.1).
 - Produced with the ./phazeOne firmware review skill for Claude Code. Our thanks to the maintainers of every project above.

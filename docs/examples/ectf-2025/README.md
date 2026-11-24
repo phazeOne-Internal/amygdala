@@ -15,4 +15,6 @@ How they were produced, on macOS with cppcheck, flawfinder, semgrep, lizard and 
 - Secret values the review found are redacted in every file, as the skill requires.
 - The review's **Maintainability** section (function size and complexity from lizard, plus the layering check) was added after the first run by re-running `run_static_tools.py --tools lizard` on the same source and copying its `maintainability.json` into `findings.json`. The decoder rates *good* on maintainability while carrying five Reds, which is the point of keeping the two apart: tidy code can still be wrong.
 
+These files are regenerated whenever the renderer changes (a test in `tests/test_scripts.py` fails if they are stale), so they always show the current report layout. The findings themselves are from the original run.
+
 `report.html` is the engineering-manager view and `report.md` the developer view of the same `findings.json`. The OSS notices file is the skill's draft, with the gaps it could not fill left visible.

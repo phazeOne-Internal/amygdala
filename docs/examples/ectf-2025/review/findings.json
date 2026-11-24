@@ -805,7 +805,7 @@
     "status": "ran",
     "notes": "1.26.1; 30 functions measured; 0 over thresholds (complexity > 15, > 100 lines, > 5 parameters)",
     "thresholds": {
-      "ccn": 15,
+      "complexity": 15,
       "nloc": 100,
       "params": 5
     },
@@ -813,8 +813,8 @@
       "files": 5,
       "functions": 30,
       "nloc": 361,
-      "avg_ccn": 3.4,
-      "max_ccn": 9,
+      "avg_complexity": 3.4,
+      "max_complexity": 9,
       "avg_nloc": 12.0,
       "over_threshold": 0,
       "pct_over": 0.0
@@ -825,8 +825,8 @@
         "files": 5,
         "functions": 30,
         "nloc": 361,
-        "avg_ccn": 3.4,
-        "max_ccn": 9,
+        "avg_complexity": 3.4,
+        "max_complexity": 9,
         "over_threshold": 0
       }
     ],
@@ -836,7 +836,7 @@
         "file": "decoder/src/host_messaging.c",
         "line": 178,
         "nloc": 25,
-        "ccn": 9,
+        "complexity": 9,
         "params": 3,
         "over": []
       },
@@ -845,7 +845,7 @@
         "file": "decoder/src/host_messaging.c",
         "line": 106,
         "nloc": 21,
-        "ccn": 8,
+        "complexity": 8,
         "params": 3,
         "over": []
       },
@@ -854,7 +854,7 @@
         "file": "decoder/src/decoder.c",
         "line": 373,
         "nloc": 40,
-        "ccn": 7,
+        "complexity": 7,
         "params": 0,
         "over": []
       },
@@ -863,7 +863,7 @@
         "file": "decoder/src/host_messaging.c",
         "line": 141,
         "nloc": 21,
-        "ccn": 7,
+        "complexity": 7,
         "params": 3,
         "over": []
       },
@@ -872,7 +872,7 @@
         "file": "decoder/src/decoder.c",
         "line": 216,
         "nloc": 26,
-        "ccn": 6,
+        "complexity": 6,
         "params": 2,
         "over": []
       },
@@ -881,7 +881,7 @@
         "file": "decoder/src/simple_crypto.c",
         "line": 35,
         "nloc": 15,
-        "ccn": 6,
+        "complexity": 6,
         "params": 4,
         "over": []
       },
@@ -890,7 +890,7 @@
         "file": "decoder/src/simple_crypto.c",
         "line": 71,
         "nloc": 15,
-        "ccn": 6,
+        "complexity": 6,
         "params": 4,
         "over": []
       },
@@ -899,7 +899,7 @@
         "file": "decoder/src/host_messaging.c",
         "line": 83,
         "nloc": 12,
-        "ccn": 6,
+        "complexity": 6,
         "params": 3,
         "over": []
       },
@@ -908,7 +908,7 @@
         "file": "decoder/src/decoder.c",
         "line": 289,
         "nloc": 23,
-        "ccn": 5,
+        "complexity": 5,
         "params": 0,
         "over": []
       },
@@ -917,7 +917,7 @@
         "file": "decoder/src/host_messaging.c",
         "line": 26,
         "nloc": 15,
-        "ccn": 5,
+        "complexity": 5,
         "params": 2,
         "over": []
       },
@@ -926,7 +926,7 @@
         "file": "decoder/src/decoder.c",
         "line": 143,
         "nloc": 11,
-        "ccn": 5,
+        "complexity": 5,
         "params": 1,
         "over": []
       }

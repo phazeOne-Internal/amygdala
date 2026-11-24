@@ -1,6 +1,6 @@
 # Firmware review — 2025 eCTF insecure example decoder (MITRE reference design)
 
-**Date:** 2026-11-20 19:46 · **Generated:** 2026-11-24 21:43 GMT (UTC+0000) · **Version:** 2025 eCTF insecure example (reference design snapshot, Apache-2.0) · **Reviewer:** ./phazeOne amygdala:review  
+**Date:** 2026-11-20 19:46 · **Generated:** 2026-11-24 21:48 GMT (UTC+0000) · **Version:** 2025 eCTF insecure example (reference design snapshot, Apache-2.0) · **Reviewer:** ./phazeOne amygdala:review  
 **Platform:** Analog Devices MAX78000 (FTHR_RevA) · MSDK v2024_02 · bare-metal superloop, no RTOS · UART host link at 115200 baud · frames relayed from a TCP 'satellite' broadcast by host tooling (detection confidence: high)  
 **Scope:** 22 first-party files, ~1,982 lines in `decoder/src/`, `decoder/inc/`, `decoder/startup_firmware.S`, `decoder/firmware.ld`, `decoder/Makefile`, `decoder/project.mk`, `decoder/Dockerfile`, `design/ectf25_design/`
 

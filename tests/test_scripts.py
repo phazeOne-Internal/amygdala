@@ -329,7 +329,7 @@ class ReviewScripts(TempDirTest):
         self.assertEqual(len(funcs), 3, "the vendored row must be dropped")
         h = mod.maintainability_metrics(funcs)
         self.assertEqual(h["totals"]["functions"], 3)
-        self.assertEqual(h["totals"]["max_ccn"], 48)
+        self.assertEqual(h["totals"]["max_complexity"], 48)
         self.assertEqual(h["by_directory"][0]["path"], "src/app")
         self.assertEqual(h["by_directory"][0]["over_threshold"], 1)
         self.assertEqual(h["worst_functions"][0]["name"], "parse")
@@ -393,12 +393,12 @@ class Renderer(TempDirTest):
         src = load(os.path.join(FIXTURES, "findings_firmware.json"))
         src["maintainability"] = {
             "tool": "lizard", "status": "ran", "notes": "1.17.10; 40 functions measured; 3 over thresholds",
-            "thresholds": {"ccn": 15, "nloc": 100, "params": 5},
-            "totals": {"files": 6, "functions": 40, "nloc": 1800, "avg_ccn": 6.2, "max_ccn": 41, "avg_nloc": 45.0,
+            "thresholds": {"complexity": 15, "nloc": 100, "params": 5},
+            "totals": {"files": 6, "functions": 40, "nloc": 1800, "avg_complexity": 6.2, "max_complexity": 41, "avg_nloc": 45.0,
                        "over_threshold": 3, "pct_over": 7.5},
-            "by_directory": [{"path": "source/app", "files": 4, "functions": 30, "nloc": 1500, "avg_ccn": 7.1, "max_ccn": 41, "over_threshold": 3},
-                             {"path": "source/drivers", "files": 2, "functions": 10, "nloc": 300, "avg_ccn": 3.0, "max_ccn": 8, "over_threshold": 0}],
-            "worst_functions": [{"name": "mqtt_handle", "file": "source/app/mqtt.c", "line": 88, "nloc": 240, "ccn": 41, "params": 2,
+            "by_directory": [{"path": "source/app", "files": 4, "functions": 30, "nloc": 1500, "avg_complexity": 7.1, "max_complexity": 41, "over_threshold": 3},
+                             {"path": "source/drivers", "files": 2, "functions": 10, "nloc": 300, "avg_complexity": 3.0, "max_complexity": 8, "over_threshold": 0}],
+            "worst_functions": [{"name": "mqtt_handle", "file": "source/app/mqtt.c", "line": 88, "nloc": 240, "complexity": 41, "params": 2,
                                  "over": ["complexity", "length"]}],
             "rating": "fair", "rating_basis": "3 of 40 functions (8%) are over the size / complexity thresholds; worst complexity 41",
             "layering": {"status": "checked", "lower_files": 2, "upper_files": 4, "basis": ["directory"],
@@ -468,6 +468,38 @@ class Renderer(TempDirTest):
         cp = run(os.path.join(REVIEW, "render_report.py"), bad, "--out-dir", self.tmp, expect=None)
         self.assertNotEqual(cp.returncode, 0, "renderer accepted an invalid findings.json")
         self.assertFalse(os.path.exists(self.path("report.html")))
+
+
+class ExampleReports(TempDirTest):
+    """The public example reports under docs/examples are real renderer output. Any change to the renderer
+    (a new section, a wording change) must be followed by a re-render, or the published pages drift."""
+
+    RENDER = "FW_REVIEW_OPEN=0 python3 plugin/skills/review/scripts/render_report.py docs/examples/ectf-2025/{ex}/findings.json --out-dir docs/examples/ectf-2025/{ex}"
+
+    @staticmethod
+    def norm(text):
+        text = text.replace("\r\n", "\n")
+        text = re.sub(r"Generated</b><span class='v'>[^<]*", "Generated</b><span class='v'>X", text)
+        text = re.sub(r"\*\*Generated:\*\* [^·\n]*", "**Generated:** X", text)
+        return re.sub(r"Copyright ([^<]*?) \d{4}", r"Copyright \1 YEAR", text)
+
+    def test_examples_match_current_renderer(self):
+        for ex in ("review", "oss"):
+            src = os.path.join(ROOT, "docs", "examples", "ectf-2025", ex)
+            out = self.path(ex)
+            os.makedirs(out)
+            run(os.path.join(REVIEW, "render_report.py"), os.path.join(src, "findings.json"), "--out-dir", out,
+                env={"FW_REVIEW_OPEN": "0"})
+            for f in ("report.html", "report.md", "findings.csv"):
+                self.assertEqual(self.norm(read(os.path.join(src, f))), self.norm(read(os.path.join(out, f))),
+                                 f"docs/examples/ectf-2025/{ex}/{f} is stale: re-render it with  " + self.RENDER.format(ex=ex))
+
+    def test_review_example_shows_every_section(self):
+        """A new optional block in findings.json needs real data in the example, or the public page never shows it."""
+        d = load(os.path.join(ROOT, "docs", "examples", "ectf-2025", "review", "findings.json"))
+        for key in ("next_steps", "maintainability"):
+            self.assertIn(key, d, f"review example findings.json has no '{key}': produce it from the fixture and re-render")
+        self.assertEqual(d["maintainability"]["status"], "ran")
 
 
 class OssScripts(TempDirTest):

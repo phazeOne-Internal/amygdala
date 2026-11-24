@@ -1,6 +1,6 @@
 # Open-source licence review — 2025 eCTF insecure example decoder (MITRE reference design)
 
-**Date:** 2026-11-20 19:44 · **Generated:** 2026-11-20 19:50 GMT (UTC+0000) · **Version:** 2025 reference design (tools package 2025.01.15; no git metadata in the reviewed copy) · **Reviewer:** ./phazeOne amygdala:oss  
+**Date:** 2026-11-20 19:44 · **Generated:** 2026-11-24 21:48 GMT (UTC+0000) · **Version:** 2025 reference design (tools package 2025.01.15; no git metadata in the reviewed copy) · **Reviewer:** ./phazeOne amygdala:oss  
 **Platform:** Analog Devices MAX78000 (FTHR_RevA) bare-metal decoder firmware · ADI MSDK v2024_02 · GNU Arm GCC in a Docker build container · host-side Python design and tool packages (detection confidence: high)  
 **Scope:** 40 first-party files, ~4,060 lines in `decoder/src/`, `decoder/inc/`, `decoder/project.mk`, `decoder/firmware.ld`, `design/`, `tools/`, `frames/`
 

@@ -17,6 +17,8 @@ See what the output looks like before installing anything. Both skills were run 
 
 The developer Markdown, CSV, SBOM and notices files, and how the reports were produced, are in [docs/examples/ectf-2025](docs/examples/ectf-2025/README.md).
 
+The examples are real renderer output, and a test (`ExampleReports`) fails if they lag the renderer. After any change to `render_report.py`, re-render both with `FW_REVIEW_OPEN=0 python3 plugin/skills/review/scripts/render_report.py docs/examples/ectf-2025/<review|oss>/findings.json --out-dir docs/examples/ectf-2025/<review|oss>` and commit the result. A new section that needs data (as `maintainability` did) also needs that data produced from the fixture and added to the example `findings.json`, otherwise the public page never shows it.
+
 ## Requirements
 
 - Claude Code.

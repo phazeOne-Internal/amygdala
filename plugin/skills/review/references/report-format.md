@@ -87,9 +87,9 @@ Each **area** in the scorecard takes the worst rating of its findings. An area w
 
 - `tool`, `status`, `notes`: lizard's run status, same values as `tools[].status`. When lizard was not installed the section
   still appears, says so, and shows the layering result alone.
-- `thresholds`: `{"ccn": 15, "nloc": 100, "params": 5}`. `totals`: functions, files, `nloc`, `avg_ccn`, `max_ccn`, `avg_nloc`,
+- `thresholds`: `{"complexity": 15, "nloc": 100, "params": 5}`. `totals`: functions, files, `nloc`, `avg_complexity`, `max_complexity`, `avg_nloc`,
   `over_threshold`, `pct_over`. `by_directory`: one row per directory, worst first. `worst_functions`: up to 15, each with
-  `name`, `file`, `line`, `nloc`, `ccn`, `params` and `over` (which thresholds it exceeds).
+  `name`, `file`, `line`, `nloc`, `complexity`, `params` and `over` (which thresholds it exceeds).
 - `rating`: `good` | `fair` | `poor` | `unknown`, with `rating_basis` stating the numbers it came from. Good: at most 5% of
   functions over a threshold and no function over complexity 30. Fair: at most 15% and none over 60. Otherwise poor.
 - `layering`: `status` (`checked` | `not_inferable`), `lower_files`, `upper_files`, `basis`, `upward_includes`, `upward_calls`,

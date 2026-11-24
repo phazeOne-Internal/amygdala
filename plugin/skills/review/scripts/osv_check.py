@@ -107,7 +107,9 @@ def collect_west(root):
         for m in re.finditer(r"-\s*name:\s*([\w.-]+)\s*\n\s*url-base:\s*(\S+)", text):
             remotes[m.group(1)] = m.group(2)
         default_remote = next(iter(remotes), None)
-        m = re.search(r"defaults:\s*\n(?:\s+.*\n)*?\s+remote:\s*([\w.-]+)", text)
+        # horizontal whitespace only inside the block: \s could also eat newlines, which makes the
+        # repetition ambiguous and the match time explode on a long run of blank-ish lines
+        m = re.search(r"defaults:[ \t]*\n(?:[ \t]+.*\n)*?[ \t]+remote:[ \t]*([\w.-]+)", text)
         if m:
             default_remote = m.group(1)
         proj_block = text.split("projects:", 1)[1] if "projects:" in text else ""

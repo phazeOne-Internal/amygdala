@@ -140,7 +140,7 @@ TOOLS = {
 # A function over any of these is listed as a lead and counted against the directory it lives in. The values
 # are the common industry defaults (McCabe's 10-15 for complexity, ~100 lines, 5 parameters); they mark
 # functions that are hard to test and review, not functions that are wrong.
-LIZARD_THRESHOLDS = {"ccn": 15, "nloc": 100, "params": 5}
+LIZARD_THRESHOLDS = {"complexity": 15, "nloc": 100, "params": 5}
 WORST_FUNCTIONS = 15
 EXTRA = {}   # per-tool side output that is not a lead (lizard: the function metrics)
 
@@ -478,7 +478,7 @@ def run_lizard(path, root, srcs, incs, args):
         if len(row) < 11:
             continue
         try:
-            nloc, ccn, tokens, params = int(row[0]), int(row[1]), int(row[2]), int(row[3])
+            nloc, cyclo, tokens, params = int(row[0]), int(row[1]), int(row[2]), int(row[3])
             start, end = int(row[9]), int(row[10])
         except ValueError:
             continue   # header or a line lizard printed that is not a record
@@ -486,7 +486,7 @@ def run_lizard(path, root, srcs, incs, args):
         if os.path.normcase(os.path.abspath(f)) not in wanted:
             continue
         funcs.append({"name": row[7], "file": rel(root, f), "line": start, "end_line": end,
-                      "nloc": nloc, "ccn": ccn, "params": params, "tokens": tokens})
+                      "nloc": nloc, "complexity": cyclo, "params": params, "tokens": tokens})
     if not funcs and rc not in (0, None):
         return [], "failed", f"lizard exit {rc}: {' '.join((err or out).split())[:200]}"
     EXTRA["lizard"] = funcs
@@ -502,28 +502,28 @@ def run_lizard(path, root, srcs, incs, args):
 def over_thresholds(fn):
     """Which thresholds a function exceeds, as labels; empty when it is within all of them."""
     t = LIZARD_THRESHOLDS
-    return [label for k, label in (("ccn", "complexity"), ("nloc", "length"), ("params", "parameters")) if fn[k] > t[k]]
+    return [label for k, label in (("complexity", "complexity"), ("nloc", "length"), ("params", "parameters")) if fn[k] > t[k]]
 
 
 def thresholds_text():
     t = LIZARD_THRESHOLDS
-    return f"(complexity > {t['ccn']}, > {t['nloc']} lines, > {t['params']} parameters)"
+    return f"(complexity > {t['complexity']}, > {t['nloc']} lines, > {t['params']} parameters)"
 
 
 def metrics_text(fn):
-    return f"{fn['name']}(): complexity {fn['ccn']}, {fn['nloc']} lines, {fn['params']} parameter(s) " + thresholds_text()
+    return f"{fn['name']}(): complexity {fn['complexity']}, {fn['nloc']} lines, {fn['params']} parameter(s) " + thresholds_text()
 
 
-def maintainability_band(functions, over, max_ccn):
+def maintainability_band(functions, over, max_complexity):
     """good / fair / poor from the share of functions over thresholds and the single worst function.
     A heuristic to point the reader at where to look, not a certified metric; the basis is stated beside it."""
     if not functions:
         return "unknown", "no functions measured"
     pct = 100.0 * over / functions
-    basis = f"{over} of {functions} functions ({pct:.0f}%) are over the size / complexity thresholds; worst complexity {max_ccn}"
-    if pct <= 5 and max_ccn < 30:
+    basis = f"{over} of {functions} functions ({pct:.0f}%) are over the size / complexity thresholds; worst complexity {max_complexity}"
+    if pct <= 5 and max_complexity < 30:
         return "good", basis
-    if pct <= 15 and max_ccn < 60:
+    if pct <= 15 and max_complexity < 60:
         return "fair", basis
     return "poor", basis
 
@@ -535,33 +535,33 @@ def maintainability_metrics(funcs):
     dirs = {}
     for fn in funcs:
         d = os.path.dirname(fn["file"]) or "."
-        g = dirs.setdefault(d, {"path": d, "files": set(), "functions": 0, "nloc": 0, "ccn_sum": 0, "max_ccn": 0, "over_threshold": 0})
+        g = dirs.setdefault(d, {"path": d, "files": set(), "functions": 0, "nloc": 0, "complexity_sum": 0, "max_complexity": 0, "over_threshold": 0})
         g["files"].add(fn["file"])
         g["functions"] += 1
         g["nloc"] += fn["nloc"]
-        g["ccn_sum"] += fn["ccn"]
-        g["max_ccn"] = max(g["max_ccn"], fn["ccn"])
+        g["complexity_sum"] += fn["complexity"]
+        g["max_complexity"] = max(g["max_complexity"], fn["complexity"])
         g["over_threshold"] += 1 if over_thresholds(fn) else 0
     by_dir = []
-    for g in sorted(dirs.values(), key=lambda g: (-g["over_threshold"], -g["max_ccn"], g["path"])):
+    for g in sorted(dirs.values(), key=lambda g: (-g["over_threshold"], -g["max_complexity"], g["path"])):
         by_dir.append({"path": g["path"], "files": len(g["files"]), "functions": g["functions"], "nloc": g["nloc"],
-                       "avg_ccn": round(g["ccn_sum"] / g["functions"], 1), "max_ccn": g["max_ccn"],
+                       "avg_complexity": round(g["complexity_sum"] / g["functions"], 1), "max_complexity": g["max_complexity"],
                        "over_threshold": g["over_threshold"]})
     n = len(funcs)
     over = sum(1 for fn in funcs if over_thresholds(fn))
-    max_ccn = max(fn["ccn"] for fn in funcs)
-    ranked = sorted(funcs, key=lambda fn: (-fn["ccn"], -fn["nloc"], fn["file"], fn["line"]))
-    worst = [fn for fn in ranked if fn["ccn"] >= 5 or over_thresholds(fn)][:WORST_FUNCTIONS] or ranked[:5]
-    band, basis = maintainability_band(n, over, max_ccn)
+    max_complexity = max(fn["complexity"] for fn in funcs)
+    ranked = sorted(funcs, key=lambda fn: (-fn["complexity"], -fn["nloc"], fn["file"], fn["line"]))
+    worst = [fn for fn in ranked if fn["complexity"] >= 5 or over_thresholds(fn)][:WORST_FUNCTIONS] or ranked[:5]
+    band, basis = maintainability_band(n, over, max_complexity)
     return {
         "thresholds": dict(LIZARD_THRESHOLDS),
         "totals": {"files": len({fn["file"] for fn in funcs}), "functions": n, "nloc": sum(fn["nloc"] for fn in funcs),
-                   "avg_ccn": round(sum(fn["ccn"] for fn in funcs) / n, 1), "max_ccn": max_ccn,
+                   "avg_complexity": round(sum(fn["complexity"] for fn in funcs) / n, 1), "max_complexity": max_complexity,
                    "avg_nloc": round(sum(fn["nloc"] for fn in funcs) / n, 1),
                    "over_threshold": over, "pct_over": round(100.0 * over / n, 1)},
         "by_directory": by_dir,
         "worst_functions": [{"name": fn["name"], "file": fn["file"], "line": fn["line"], "nloc": fn["nloc"],
-                             "ccn": fn["ccn"], "params": fn["params"], "over": over_thresholds(fn)} for fn in worst],
+                             "complexity": fn["complexity"], "params": fn["params"], "over": over_thresholds(fn)} for fn in worst],
         "rating": band, "rating_basis": basis,
     }
 
@@ -733,14 +733,14 @@ def maintainability_md(h):
     L.append(f"Maintainability: **{h['rating']}** ({h['rating_basis']}). Metrics from lizard: {h['status']}, {h['notes']}.\n")
     if h.get("totals"):
         t = h["totals"]
-        L.append(f"{t['functions']} functions in {t['files']} files, {t['nloc']:,} lines of code; average complexity {t['avg_ccn']}, "
-                 f"max {t['max_ccn']}; {t['over_threshold']} ({t['pct_over']}%) over thresholds {thresholds_text()}.\n")
-        L.append("| Directory | Files | Functions | Lines | Avg CCN | Max CCN | Over threshold |\n|---|---|---|---|---|---|---|")
+        L.append(f"{t['functions']} functions in {t['files']} files, {t['nloc']:,} lines of code; average complexity {t['avg_complexity']}, "
+                 f"max {t['max_complexity']}; {t['over_threshold']} ({t['pct_over']}%) over thresholds {thresholds_text()}.\n")
+        L.append("| Directory | Files | Functions | Lines | Avg complexity | Max complexity | Over threshold |\n|---|---|---|---|---|---|---|")
         for d in h["by_directory"]:
-            L.append(f"| `{d['path']}` | {d['files']} | {d['functions']} | {d['nloc']:,} | {d['avg_ccn']} | {d['max_ccn']} | {d['over_threshold']} |")
+            L.append(f"| `{d['path']}` | {d['files']} | {d['functions']} | {d['nloc']:,} | {d['avg_complexity']} | {d['max_complexity']} | {d['over_threshold']} |")
         L.append("\n| Function | Location | Lines | CCN | Params |\n|---|---|---|---|---|")
         for w in h["worst_functions"]:
-            L.append(f"| `{w['name']}` | `{w['file']}:{w['line']}` | {w['nloc']} | {w['ccn']} | {w['params']} |")
+            L.append(f"| `{w['name']}` | `{w['file']}:{w['line']}` | {w['nloc']} | {w['complexity']} | {w['params']} |")
         L.append("")
     lay = h["layering"]
     if lay["status"] == "checked":

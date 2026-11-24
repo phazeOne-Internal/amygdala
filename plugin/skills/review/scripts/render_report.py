@@ -523,7 +523,7 @@ LAYER_RULE_LABEL = {"layer-upward-include": "driver includes an application head
 
 def _thr(ch):
     t = ch.get("thresholds") or {}
-    return f"complexity > {t.get('ccn', '?')}, > {t.get('nloc', '?')} lines, > {t.get('params', '?')} parameters"
+    return f"complexity > {t.get('complexity', '?')}, > {t.get('nloc', '?')} lines, > {t.get('params', '?')} parameters"
 
 
 def layering_summary_text(lay):
@@ -552,7 +552,7 @@ def maintainability_html(ch):
     if t:
         a("<table><tr><th>Functions</th><th>Files</th><th>Lines of code</th><th>Avg complexity</th><th>Max complexity</th><th>Over thresholds</th></tr>"
           f"<tr><td class='num'>{t.get('functions', 0)}</td><td class='num'>{t.get('files', 0)}</td><td class='num'>{int(t.get('nloc', 0)):,}</td>"
-          f"<td class='num'>{t.get('avg_ccn', '')}</td><td class='num'>{t.get('max_ccn', '')}</td>"
+          f"<td class='num'>{t.get('avg_complexity', '')}</td><td class='num'>{t.get('max_complexity', '')}</td>"
           f"<td class='num'>{t.get('over_threshold', 0)} ({t.get('pct_over', 0)}%)</td></tr></table>"
           f"<p class='small'>Thresholds: {e(_thr(ch))}. Complexity is cyclomatic complexity (independent paths through the function). "
           "Functions over a threshold are hard to test completely and hard to review; they are listed as leads, not as defects.</p>")
@@ -561,7 +561,7 @@ def maintainability_html(ch):
             for r in ch["by_directory"]:
                 over = r.get("over_threshold", 0)
                 a(f"<tr><td class='loc'>{e(r.get('path'))}</td><td class='num'>{r.get('files', '')}</td><td class='num'>{r.get('functions', '')}</td>"
-                  f"<td class='num'>{int(r.get('nloc', 0)):,}</td><td class='num'>{r.get('avg_ccn', '')}</td><td class='num'>{r.get('max_ccn', '')}</td>"
+                  f"<td class='num'>{int(r.get('nloc', 0)):,}</td><td class='num'>{r.get('avg_complexity', '')}</td><td class='num'>{r.get('max_complexity', '')}</td>"
                   f"<td class='num{' over' if over else ''}'>{over}</td></tr>")
             a("</table>")
         if ch.get("worst_functions"):
@@ -569,7 +569,7 @@ def maintainability_html(ch):
             for w in ch["worst_functions"]:
                 over = w.get("over") or []
                 a(f"<tr><td><code>{e(w.get('name'))}()</code></td><td class='loc'>{e(w.get('file'))}:{e(w.get('line'))}</td>"
-                  f"<td class='num'>{w.get('nloc', '')}</td><td class='num'>{w.get('ccn', '')}</td><td class='num'>{w.get('params', '')}</td>"
+                  f"<td class='num'>{w.get('nloc', '')}</td><td class='num'>{w.get('complexity', '')}</td><td class='num'>{w.get('params', '')}</td>"
                   f"<td class='{'over' if over else 'small'}'>{e(', '.join(over)) if over else '—'}</td></tr>")
             a("</table>")
     else:
@@ -602,18 +602,18 @@ def maintainability_md(ch):
     t = ch.get("totals")
     if t:
         a("| Functions | Files | Lines of code | Avg complexity | Max complexity | Over thresholds |\n|---|---|---|---|---|---|\n"
-          f"| {t.get('functions', 0)} | {t.get('files', 0)} | {int(t.get('nloc', 0)):,} | {t.get('avg_ccn', '')} | {t.get('max_ccn', '')} | {t.get('over_threshold', 0)} ({t.get('pct_over', 0)}%) |\n")
+          f"| {t.get('functions', 0)} | {t.get('files', 0)} | {int(t.get('nloc', 0)):,} | {t.get('avg_complexity', '')} | {t.get('max_complexity', '')} | {t.get('over_threshold', 0)} ({t.get('pct_over', 0)}%) |\n")
         a(f"Thresholds: {_thr(ch)}. Functions over a threshold are hard to test completely and hard to review; they are leads, not defects.\n")
         if ch.get("by_directory"):
             a("| Directory | Files | Functions | Lines | Avg complexity | Max complexity | Over thresholds |\n|---|---|---|---|---|---|---|")
             for r in ch["by_directory"]:
-                a(f"| `{r.get('path')}` | {r.get('files', '')} | {r.get('functions', '')} | {int(r.get('nloc', 0)):,} | {r.get('avg_ccn', '')} | {r.get('max_ccn', '')} | {r.get('over_threshold', 0)} |")
+                a(f"| `{r.get('path')}` | {r.get('files', '')} | {r.get('functions', '')} | {int(r.get('nloc', 0)):,} | {r.get('avg_complexity', '')} | {r.get('max_complexity', '')} | {r.get('over_threshold', 0)} |")
             a("")
         if ch.get("worst_functions"):
             a("**Largest and most complex functions**\n\n| Function | Location | Lines | Complexity | Params | Over |\n|---|---|---|---|---|---|")
             for w in ch["worst_functions"]:
                 over = w.get("over") or []
-                a(f"| `{w.get('name')}()` | `{w.get('file')}:{w.get('line')}` | {w.get('nloc', '')} | {w.get('ccn', '')} | {w.get('params', '')} | {', '.join(over) if over else '—'} |")
+                a(f"| `{w.get('name')}()` | `{w.get('file')}:{w.get('line')}` | {w.get('nloc', '')} | {w.get('complexity', '')} | {w.get('params', '')} | {', '.join(over) if over else '—'} |")
             a("")
     else:
         a(f"Function metrics not available: {ch.get('notes') or 'lizard did not run'}.\n")

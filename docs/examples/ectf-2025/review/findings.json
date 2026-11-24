@@ -6,7 +6,7 @@
     "review_date": "2026-11-20 19:46",
     "reviewer": "./phazeOne amygdala:review",
     "platform": {
-      "summary": "Analog Devices MAX78000 (FTHR_RevA) \u00b7 MSDK v2024_02 \u00b7 bare-metal superloop, no RTOS \u00b7 UART host link at 115200 baud \u00b7 frames relayed from a TCP 'satellite' broadcast by host tooling",
+      "summary": "Analog Devices MAX78000 (FTHR_RevA) · MSDK v2024_02 · bare-metal superloop, no RTOS · UART host link at 115200 baud · frames relayed from a TCP 'satellite' broadcast by host tooling",
       "detection_confidence": "high",
       "notes": "Firmware is linked to run behind the separate eCTF bootloader (bootloader region 0x10000000-0x1000E000, application at 0x1000E000); the bootloader is not in this repository. The wolfSSL crypto example is compiled out (CRYPTO_EXAMPLE=0 in project.mk)."
     },
@@ -134,6 +134,11 @@
       "name": "OSV.dev dependency lookup",
       "status": "skipped",
       "notes": "skipped (no consent): no user was available to approve sending dependency URLs to api.osv.dev; the plan found no machine-readable dependency manifests in any case"
+    },
+    {
+      "name": "lizard",
+      "status": "ran",
+      "notes": "30 functions measured; 0 over thresholds (complexity > 15, > 100 lines, > 5 parameters); see Code health"
     }
   ],
   "findings": [
@@ -486,7 +491,7 @@
           "line": 414
         }
       ],
-      "evidence": "// TODO: remove this from your final design\ntypedef uint32_t aErjfkdfru;const aErjfkdfru aseiFuengleR[]={0x1f\u2026 [redacted]};...\n\nvoid boot_flag(void) {\n    ...\n    sprintf(output_buf, \"Boot Reference Flag: %s\\n\", flag);\n    print_debug(output_buf);\n}\n...\ncase LIST_MSG:\n    boot_flag();",
+      "evidence": "// TODO: remove this from your final design\ntypedef uint32_t aErjfkdfru;const aErjfkdfru aseiFuengleR[]={0x1f… [redacted]};...\n\nvoid boot_flag(void) {\n    ...\n    sprintf(output_buf, \"Boot Reference Flag: %s\\n\", flag);\n    print_debug(output_buf);\n}\n...\ncase LIST_MSG:\n    boot_flag();",
       "description": "A secret is stored in the image as two obfuscated constant arrays, recovered at run time and printed as a debug message whenever the host sends a List command. The source marks it as a reference-design leftover to remove. Obfuscation is not protection: the value is in every image and is handed to any host that asks.",
       "impact": "Any secret handled this way is exposed to whoever can send a List command or read the firmware image. In the eCTF this is the intended boot check; in a product it is the pattern by which keys leak, and it should not survive into a release build.",
       "recommendation": "Remove boot_flag() and the obfuscated arrays from release builds (or guard them with a debug-only build flag that the release target cannot set). Keep real secrets out of source entirely; provision them per device and keep them in protected storage.",
@@ -794,5 +799,150 @@
     "Add a watchdog, real fault handlers with a crash record, and A/B flash storage (FW-010, FW-008).",
     "Add host-side unit and fuzz tests for read_packet() and the command handlers, plus -Wextra and cppcheck/semgrep in CI (FW-018).",
     "Obtain the bootloader and confirm image signing, rollback protection and debug lock (FW-013, FW-014); generate a compile_commands.json with 'bear -- make' so clang-tidy can run next time."
-  ]
+  ],
+  "code_health": {
+    "tool": "lizard",
+    "status": "ran",
+    "notes": "1.26.1; 30 functions measured; 0 over thresholds (complexity > 15, > 100 lines, > 5 parameters)",
+    "thresholds": {
+      "ccn": 15,
+      "nloc": 100,
+      "params": 5
+    },
+    "totals": {
+      "files": 5,
+      "functions": 30,
+      "nloc": 361,
+      "avg_ccn": 3.4,
+      "max_ccn": 9,
+      "avg_nloc": 12.0,
+      "over_threshold": 0,
+      "pct_over": 0.0
+    },
+    "by_directory": [
+      {
+        "path": "decoder/src",
+        "files": 5,
+        "functions": 30,
+        "nloc": 361,
+        "avg_ccn": 3.4,
+        "max_ccn": 9,
+        "over_threshold": 0
+      }
+    ],
+    "worst_functions": [
+      {
+        "name": "read_packet",
+        "file": "decoder/src/host_messaging.c",
+        "line": 178,
+        "nloc": 25,
+        "ccn": 9,
+        "params": 3,
+        "over": []
+      },
+      {
+        "name": "write_hex",
+        "file": "decoder/src/host_messaging.c",
+        "line": 106,
+        "nloc": 21,
+        "ccn": 8,
+        "params": 3,
+        "over": []
+      },
+      {
+        "name": "main",
+        "file": "decoder/src/decoder.c",
+        "line": 373,
+        "nloc": 40,
+        "ccn": 7,
+        "params": 0,
+        "over": []
+      },
+      {
+        "name": "write_packet",
+        "file": "decoder/src/host_messaging.c",
+        "line": 141,
+        "nloc": 21,
+        "ccn": 7,
+        "params": 3,
+        "over": []
+      },
+      {
+        "name": "update_subscription",
+        "file": "decoder/src/decoder.c",
+        "line": 216,
+        "nloc": 26,
+        "ccn": 6,
+        "params": 2,
+        "over": []
+      },
+      {
+        "name": "encrypt_sym",
+        "file": "decoder/src/simple_crypto.c",
+        "line": 35,
+        "nloc": 15,
+        "ccn": 6,
+        "params": 4,
+        "over": []
+      },
+      {
+        "name": "decrypt_sym",
+        "file": "decoder/src/simple_crypto.c",
+        "line": 71,
+        "nloc": 15,
+        "ccn": 6,
+        "params": 4,
+        "over": []
+      },
+      {
+        "name": "write_bytes",
+        "file": "decoder/src/host_messaging.c",
+        "line": 83,
+        "nloc": 12,
+        "ccn": 6,
+        "params": 3,
+        "over": []
+      },
+      {
+        "name": "init",
+        "file": "decoder/src/decoder.c",
+        "line": 289,
+        "nloc": 23,
+        "ccn": 5,
+        "params": 0,
+        "over": []
+      },
+      {
+        "name": "read_bytes",
+        "file": "decoder/src/host_messaging.c",
+        "line": 26,
+        "nloc": 15,
+        "ccn": 5,
+        "params": 2,
+        "over": []
+      },
+      {
+        "name": "is_subscribed",
+        "file": "decoder/src/decoder.c",
+        "line": 143,
+        "nloc": 11,
+        "ccn": 5,
+        "params": 1,
+        "over": []
+      }
+    ],
+    "rating": "good",
+    "rating_basis": "0 of 30 functions (0%) are over the size / complexity thresholds; worst complexity 9",
+    "layering": {
+      "status": "not_inferable",
+      "lower_files": 0,
+      "upper_files": 0,
+      "basis": [],
+      "upward_includes": 0,
+      "upward_calls": 0,
+      "register_access_in_app": 0,
+      "samples": {},
+      "note": "layers not inferable: no driver/HAL/BSP and application directories (or file-name conventions) found; pass --layer lower=<path> --layer upper=<path> to set them"
+    }
+  }
 }

@@ -75,9 +75,28 @@ Each **area** in the scorecard takes the worst rating of its findings. An area w
       "references": ["CWE-121", "ETSI EN 303 645 5.13", "EU CRA Annex I"]
     }
   ],
-  "next_steps": ["Optional ordered list of recommended actions beyond individual findings, e.g. 'Add cppcheck and -Werror to CI'"]
+  "next_steps": ["Optional ordered list of recommended actions beyond individual findings, e.g. 'Add cppcheck and -Werror to CI'"],
+  "code_health": { "...": "optional: paste code_health.json from run_static_tools.py unchanged; see below" }
 }
 ```
+
+### `code_health` (optional, mechanical)
+
+`run_static_tools.py` writes `code_health.json` next to `static_leads.json`. Copy it into `findings.json` as the top-level
+`code_health` value without editing it; the renderer draws the **Code health (maintainability)** section from it. It holds:
+
+- `tool`, `status`, `notes`: lizard's run status, same values as `tools[].status`. When lizard was not installed the section
+  still appears, says so, and shows the layering result alone.
+- `thresholds`: `{"ccn": 15, "nloc": 100, "params": 5}`. `totals`: functions, files, `nloc`, `avg_ccn`, `max_ccn`, `avg_nloc`,
+  `over_threshold`, `pct_over`. `by_directory`: one row per directory, worst first. `worst_functions`: up to 15, each with
+  `name`, `file`, `line`, `nloc`, `ccn`, `params` and `over` (which thresholds it exceeds).
+- `rating`: `good` | `fair` | `poor` | `unknown`, with `rating_basis` stating the numbers it came from. Good: at most 5% of
+  functions over a threshold and no function over complexity 30. Fair: at most 15% and none over 60. Otherwise poor.
+- `layering`: `status` (`checked` | `not_inferable`), `lower_files`, `upper_files`, `basis`, `upward_includes`, `upward_calls`,
+  `register_access_in_app`, `samples` (up to five locations per rule) and `note` when the layers could not be told apart.
+
+Maintainability is reported separately from the RAG verdict on purpose: it says how hard the code is to change safely, not
+whether it is correct. A `poor` rating with no findings is still a `green` verdict, and the report says why that matters.
 
 ### Field rules
 

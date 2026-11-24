@@ -106,6 +106,7 @@ ACK_TOOLS = {   # tool name as it appears in findings.json "tools" -> credit lin
     "clang-tidy": "clang-tidy (LLVM project)",
     "flawfinder": "Flawfinder (David A. Wheeler)",
     "semgrep": "Semgrep",
+    "lizard": "Lizard (Terry Yin) for function size and complexity metrics",
     "scancode": "ScanCode Toolkit (AboutCode)",
     "scancode-toolkit": "ScanCode Toolkit (AboutCode)",
     "osv": "OSV.dev (Google / OpenSSF) for third-party vulnerability records",
@@ -205,6 +206,16 @@ def validate(d):
         if f.get("rag") == "red" and f.get("confidence") == "needs-verification":
             warns.append(f"{where}: Red finding with confidence 'needs-verification' — consider Amber, or verify it")
     seen_areas = set()
+    ch = d.get("code_health")
+    if ch is not None:
+        if not isinstance(ch, dict):
+            errs.append("code_health must be an object (copy code_health.json from run_static_tools.py)")
+        else:
+            if ch.get("rating") not in (None, "good", "fair", "poor", "unknown"):
+                errs.append("code_health.rating must be good, fair, poor or unknown")
+            for k, typ in (("totals", dict), ("by_directory", list), ("worst_functions", list), ("layering", dict)):
+                if k in ch and not isinstance(ch[k], typ):
+                    errs.append(f"code_health.{k} must be a {typ.__name__}")
     for i, c in enumerate(d.get("coverage", [])):
         if c.get("area") not in CAT_LABEL:
             errs.append(f"coverage[{i}]: area '{c.get('area')}' not a valid category")
@@ -310,6 +321,8 @@ th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);verti
 th{background:var(--navy);font-weight:500;font-size:12px;color:#fff;text-transform:uppercase;letter-spacing:1px}tr:last-child td{border-bottom:none}
 .badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;letter-spacing:.6px;white-space:nowrap}
 .badge.red{background:var(--red);color:#fff}.badge.amber{background:var(--amber-solid);color:#2b1a00}.badge.green{background:var(--green);color:#fff}
+.badge.good{background:var(--green);color:#fff}.badge.fair{background:var(--amber-solid);color:#2b1a00}.badge.poor{background:var(--red);color:#fff}.badge.unknown{background:var(--grey-bg);color:var(--grey);border:1px solid #d1d5db}
+.health .over{color:var(--red);font-weight:600}.health .num{text-align:right}
 .badge.grey{background:var(--grey-bg);color:var(--grey);border:1px solid #d1d5db}.badge.partial{background:#fff;color:var(--amber);border:1.5px solid var(--amber-solid)}
 .chip{display:inline-block;padding:1px 8px;border-radius:6px;background:var(--grey-bg);font-size:12px;color:#374151;margin:0 4px 4px 0}
 code,pre{font-family:var(--mono);font-size:12.5px}
@@ -466,7 +479,11 @@ def h2(text, anchor=None):
 def acknowledgements(d):
     """Credit lines for the tools that ran, the standards drawn on, and the typeface."""
     ran = []
-    for t in d.get("tools", []) or []:
+    entries = list(d.get("tools", []) or [])
+    ch = d.get("code_health") or {}
+    if isinstance(ch, dict) and ch.get("tool"):   # lizard's status lives in code_health, not necessarily in tools[]
+        entries.append({"name": ch["tool"], "status": ch.get("status")})
+    for t in entries:
         name = str(t.get("name", "")).lower()
         if t.get("status") != "ran":
             continue
@@ -489,6 +506,132 @@ def generated_stamp():
     return now.strftime("%Y-%m-%d %H:%M %Z (UTC%z)")
 
 
+HEALTH_INTRO = ("How hard this code is to change safely, measured rather than judged: function size and cyclomatic "
+                "complexity per directory, and whether the driver and application layers stay apart. It is independent "
+                "of the findings above: tidy code can hide a Red, and messy code can be correct today, but messy code is "
+                "where the next defect is written.")
+HEALTH_BAND = {
+    "good": "Most functions are small and testable; keep it that way with a complexity gate in CI.",
+    "fair": "A minority of functions carry most of the complexity; refactor the worst before adding features.",
+    "poor": "Complexity is widespread; changes here are slow and risky, and reviews cannot keep up. Budget for refactoring.",
+    "unknown": "Not measured: lizard did not run, see the note.",
+}
+LAYER_RULE_LABEL = {"layer-upward-include": "driver includes an application header",
+                    "layer-upward-call": "driver calls an application function",
+                    "layer-register-access-in-app": "application code writes a peripheral register"}
+
+
+def _thr(ch):
+    t = ch.get("thresholds") or {}
+    return f"complexity > {t.get('ccn', '?')}, > {t.get('nloc', '?')} lines, > {t.get('params', '?')} parameters"
+
+
+def layering_summary_text(lay):
+    if not lay:
+        return ""
+    if lay.get("status") != "checked":
+        return (lay.get("note") or "not checked") + "."
+    total = lay.get("upward_includes", 0) + lay.get("upward_calls", 0) + lay.get("register_access_in_app", 0)
+    basis = ", ".join(lay.get("basis") or []) or "inferred"
+    head = (f"Layers taken from {basis} ({lay.get('lower_files', 0)} driver / HAL files, {lay.get('upper_files', 0)} application files): ")
+    if not total:
+        return head + "no upward dependencies and no direct register writes in application code found."
+    return head + (f"{lay.get('upward_includes', 0)} upward include(s), {lay.get('upward_calls', 0)} upward call(s), "
+                   f"{lay.get('register_access_in_app', 0)} direct register write(s) in application code.")
+
+
+def code_health_html(ch):
+    out = []
+    a = out.append
+    band = ch.get("rating", "unknown")
+    a(h2("Code health (maintainability)", "health") + "<div class='card health'>")
+    a(f"<p><span class='badge {e(band)}'>{e(band.upper())}</span> &nbsp;{e(HEALTH_BAND.get(band, ''))}"
+      + (f"<br><span class='small'>{e(ch['rating_basis'])}.</span>" if ch.get("rating_basis") else "") + "</p>")
+    a(f"<p class='small'>{e(HEALTH_INTRO)}</p>")
+    t = ch.get("totals")
+    if t:
+        a("<table><tr><th>Functions</th><th>Files</th><th>Lines of code</th><th>Avg complexity</th><th>Max complexity</th><th>Over thresholds</th></tr>"
+          f"<tr><td class='num'>{t.get('functions', 0)}</td><td class='num'>{t.get('files', 0)}</td><td class='num'>{int(t.get('nloc', 0)):,}</td>"
+          f"<td class='num'>{t.get('avg_ccn', '')}</td><td class='num'>{t.get('max_ccn', '')}</td>"
+          f"<td class='num'>{t.get('over_threshold', 0)} ({t.get('pct_over', 0)}%)</td></tr></table>"
+          f"<p class='small'>Thresholds: {e(_thr(ch))}. Complexity is cyclomatic complexity (independent paths through the function). "
+          "Functions over a threshold are hard to test completely and hard to review; they are listed as leads, not as defects.</p>")
+        if ch.get("by_directory"):
+            a("<h4>By directory</h4><table><tr><th>Directory</th><th>Files</th><th>Functions</th><th>Lines</th><th>Avg complexity</th><th>Max complexity</th><th>Over thresholds</th></tr>")
+            for r in ch["by_directory"]:
+                over = r.get("over_threshold", 0)
+                a(f"<tr><td class='loc'>{e(r.get('path'))}</td><td class='num'>{r.get('files', '')}</td><td class='num'>{r.get('functions', '')}</td>"
+                  f"<td class='num'>{int(r.get('nloc', 0)):,}</td><td class='num'>{r.get('avg_ccn', '')}</td><td class='num'>{r.get('max_ccn', '')}</td>"
+                  f"<td class='num{' over' if over else ''}'>{over}</td></tr>")
+            a("</table>")
+        if ch.get("worst_functions"):
+            a("<h4>Largest and most complex functions</h4><table><tr><th>Function</th><th>Location</th><th>Lines</th><th>Complexity</th><th>Params</th><th>Over</th></tr>")
+            for w in ch["worst_functions"]:
+                over = w.get("over") or []
+                a(f"<tr><td><code>{e(w.get('name'))}()</code></td><td class='loc'>{e(w.get('file'))}:{e(w.get('line'))}</td>"
+                  f"<td class='num'>{w.get('nloc', '')}</td><td class='num'>{w.get('ccn', '')}</td><td class='num'>{w.get('params', '')}</td>"
+                  f"<td class='{'over' if over else 'small'}'>{e(', '.join(over)) if over else '—'}</td></tr>")
+            a("</table>")
+    else:
+        a(f"<p class='small'>Function metrics not available: {e(ch.get('notes') or 'lizard did not run')}.</p>")
+    lay = ch.get("layering")
+    if lay:
+        a("<h4>Layering</h4><p>" + e(layering_summary_text(lay)) + "</p>")
+        samples = lay.get("samples") or {}
+        if any(samples.values()):
+            a("<ul>")
+            for rid, hits in samples.items():
+                for h in hits:
+                    extra = (f" (header {h['header']})" if h.get("header") else "") + (f" (defined in {h['defined_in']})" if h.get("defined_in") else "")
+                    a(f"<li class='small'><b>{e(LAYER_RULE_LABEL.get(rid, rid))}</b>: <span class='loc'>{e(h.get('file'))}:{e(h.get('line'))}</span> "
+                      f"<code>{e(h.get('code', ''))}</code>{e(extra)}</li>")
+            a("</ul><p class='small'>Upward dependencies couple hardware code to product logic, so the driver cannot be reused or unit-tested on its own "
+              "and a change in the application can break the driver. The usual fix is a callback or queue registered by the application, "
+              "plus a build-system rule so it cannot recur.</p>")
+    a("</div>")
+    return "".join(out)
+
+
+def code_health_md(ch):
+    L = []
+    a = L.append
+    band = ch.get("rating", "unknown")
+    a("## Code health (maintainability)\n")
+    a(f"**{band.upper()}** — {HEALTH_BAND.get(band, '')}" + (f" {ch['rating_basis']}." if ch.get("rating_basis") else "") + "\n")
+    a(f"_{HEALTH_INTRO}_\n")
+    t = ch.get("totals")
+    if t:
+        a("| Functions | Files | Lines of code | Avg complexity | Max complexity | Over thresholds |\n|---|---|---|---|---|---|\n"
+          f"| {t.get('functions', 0)} | {t.get('files', 0)} | {int(t.get('nloc', 0)):,} | {t.get('avg_ccn', '')} | {t.get('max_ccn', '')} | {t.get('over_threshold', 0)} ({t.get('pct_over', 0)}%) |\n")
+        a(f"Thresholds: {_thr(ch)}. Functions over a threshold are hard to test completely and hard to review; they are leads, not defects.\n")
+        if ch.get("by_directory"):
+            a("| Directory | Files | Functions | Lines | Avg complexity | Max complexity | Over thresholds |\n|---|---|---|---|---|---|---|")
+            for r in ch["by_directory"]:
+                a(f"| `{r.get('path')}` | {r.get('files', '')} | {r.get('functions', '')} | {int(r.get('nloc', 0)):,} | {r.get('avg_ccn', '')} | {r.get('max_ccn', '')} | {r.get('over_threshold', 0)} |")
+            a("")
+        if ch.get("worst_functions"):
+            a("**Largest and most complex functions**\n\n| Function | Location | Lines | Complexity | Params | Over |\n|---|---|---|---|---|---|")
+            for w in ch["worst_functions"]:
+                over = w.get("over") or []
+                a(f"| `{w.get('name')}()` | `{w.get('file')}:{w.get('line')}` | {w.get('nloc', '')} | {w.get('ccn', '')} | {w.get('params', '')} | {', '.join(over) if over else '—'} |")
+            a("")
+    else:
+        a(f"Function metrics not available: {ch.get('notes') or 'lizard did not run'}.\n")
+    lay = ch.get("layering")
+    if lay:
+        a("**Layering.** " + layering_summary_text(lay) + "\n")
+        samples = lay.get("samples") or {}
+        for rid, hits in samples.items():
+            for h in hits:
+                extra = (f" (header `{h['header']}`)" if h.get("header") else "") + (f" (defined in `{h['defined_in']}`)" if h.get("defined_in") else "")
+                a(f"- {LAYER_RULE_LABEL.get(rid, rid)}: `{h.get('file')}:{h.get('line')}` `{md_cell(h.get('code', ''))}`{extra}")
+        if any(samples.values()):
+            a("\nUpward dependencies couple hardware code to product logic, so the driver cannot be reused or unit-tested on its own "
+              "and a change in the application can break the driver. The usual fix is a callback or queue registered by the application, "
+              "plus a build-system rule so it cannot recur.\n")
+    return "\n".join(L) + "\n"
+
+
 def render_html(d, findings, counts, verdict, score):
     p = d["project"]
     plat = p.get("platform", {}) or {}
@@ -507,7 +650,8 @@ def render_html(d, findings, counts, verdict, score):
       f"<a class='logo' href='{e(BRAND['url'])}' target='_blank' rel='noopener' title='{e(BRAND['tagline'])}'>"
       f"<span class='word'>{e(BRAND['name'])}</span>{BRAND_LOGO_SVG}</a>"
       "<nav><a class='lnk' href='#summary'>Summary</a><a class='lnk' href='#scorecard'>Scorecard</a><a class='lnk' href='#findings'>Findings</a>"
-      f"<a class='btn outline' href='{contact}' target='_blank' rel='noopener'>Get in touch<span class='arr'>&rarr;</span></a></nav>"
+      + ("<a class='lnk' href='#health'>Code health</a>" if d.get("code_health") else "")
+      + f"<a class='btn outline' href='{contact}' target='_blank' rel='noopener'>Get in touch<span class='arr'>&rarr;</span></a></nav>"
       "</div></header>")
     a(f"<section class='hero'><div class='wrap'>"
       f"<h1>{e(TITLE)} <span class='accent'>{e(p['name'])}</span></h1><div class='meta'>")
@@ -595,6 +739,9 @@ def render_html(d, findings, counts, verdict, score):
             a("<h4>Also at</h4><ul>" + "".join(f"<li class='loc'>{e(loc_str(o))}</li>" for o in f["other_locations"]) + "</ul>")
         a("<h4>Recommendation</h4>" + para(f["recommendation"]))
         a("</div></details>")
+
+    if d.get("code_health"):
+        a(code_health_html(d["code_health"]))
 
     if d.get("next_steps"):
         a("" + h2("Recommended next steps") + "<div class='card'><ol>" + "".join(f"<li>{e(x)}</li>" for x in d["next_steps"]) + "</ol></div>")
@@ -716,6 +863,8 @@ def render_md(d, findings, counts, verdict, score):
             if f.get("status") and (res.get("note") or res.get("commit")):
                 a(f"**Resolution.** {STATUSES[status_of(f)]}" + (f" — commit `{res['commit']}`" if res.get("commit") else "")
                   + (f" ({res['date']})" if res.get("date") else "") + (f". {res['note']}" if res.get("note") else "") + "\n")
+    if d.get("code_health"):
+        a(code_health_md(d["code_health"]))
     if d.get("next_steps"):
         a("## Recommended next steps\n\n" + "\n".join(f"{i + 1}. {x}" for i, x in enumerate(d["next_steps"])) + "\n")
     a("## Coverage and method\n")

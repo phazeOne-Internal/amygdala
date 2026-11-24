@@ -255,7 +255,7 @@ class ReviewScripts(TempDirTest):
         cp = run(os.path.join(REVIEW, "run_static_tools.py"), PSOC6, "--check")
         d = json.loads(cp.stdout)
         self.assertIn(d["os"], ("macos", "linux", "windows"))
-        for tool in ("cppcheck", "clang-tidy", "flawfinder", "semgrep"):
+        for tool in ("cppcheck", "clang-tidy", "flawfinder", "semgrep", "lizard"):
             self.assertIn(tool, d["tools"])
             self.assertIn("install_commands", d["tools"][tool])
         for tool in REQUIRED_TOOLS:
@@ -280,13 +280,72 @@ class ReviewScripts(TempDirTest):
         self.assertTrue(os.path.isfile(os.path.join(out, "static_leads.md")))
         d = load(os.path.join(out, "static_leads.json"))
         status = {t["name"]: t["status"] for t in d["tools"]}
-        self.assertEqual(set(status), {"cppcheck", "clang-tidy", "flawfinder", "semgrep"})
+        self.assertEqual(set(status), {"cppcheck", "clang-tidy", "flawfinder", "semgrep", "lizard"})
         for s in status.values():
             self.assertIn(s, ("ran", "not_available", "failed", "skipped"))
         for tool in REQUIRED_TOOLS:
             self.assertEqual(status[tool], "ran", tool + ": " + json.dumps(d["tools"]))
-            self.assertGreater(sum(t["leads"] for t in d["tools"] if t["name"] == tool), 0,
-                               tool + " found no leads in a fixture full of planted defects: " + json.dumps(d["tools"]))
+            if tool != "lizard":   # lizard's leads are metrics over thresholds; a fixture may legitimately have none
+                self.assertGreater(sum(t["leads"] for t in d["tools"] if t["name"] == tool), 0,
+                                   tool + " found no leads in a fixture full of planted defects: " + json.dumps(d["tools"]))
+        # code_health.json is always written, with the layering result even when lizard is missing
+        h = load(os.path.join(out, "code_health.json"))
+        self.assertEqual(h, d["code_health"])
+        self.assertIn(h["rating"], ("good", "fair", "poor", "unknown"))
+        self.assertIn(h["layering"]["status"], ("checked", "not_inferable"))
+        if status["lizard"] == "ran":
+            self.assertGreater(h["totals"]["functions"], 0)
+            self.assertTrue(h["by_directory"] and h["worst_functions"])
+            self.assertNotEqual(h["rating"], "unknown")
+        else:
+            self.assertEqual(h["rating"], "unknown")
+
+    def test_lizard_metrics_and_maintainability_band(self):
+        """The lizard runner parses the CSV, flags functions over the thresholds as leads, and the
+        summary bands the tree good / fair / poor from the share of functions over thresholds."""
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("rst2", os.path.join(REVIEW, "run_static_tools.py"))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        root = self.path("tree")
+        os.makedirs(os.path.join(root, "src", "app"))
+        os.makedirs(os.path.join(root, "src", "drivers"))
+        write(os.path.join(root, "src", "app", "parser.c"), "int parse(void) { return 0; }\n")
+        write(os.path.join(root, "src", "drivers", "uart.c"), "void uart_init(void) { }\n")
+        srcs = [os.path.join(root, "src", "app", "parser.c"), os.path.join(root, "src", "drivers", "uart.c")]
+        csv_out = (
+            '340,48,2100,7,360,"parse@10-370@src/app/parser.c","src/app/parser.c","parse","parse(a,b,c,d,e,f,g)",10,370\n'
+            '12,3,80,1,12,"helper@400-412@src/app/parser.c","src/app/parser.c","helper","helper(x)",400,412\n'
+            '4,1,20,0,4,"uart_init@1-4@src/drivers/uart.c","src/drivers/uart.c","uart_init","uart_init()",1,4\n'
+            '9,2,60,2,9,"vendor@1-9@mtb_shared/x.c","mtb_shared/x.c","vendor","vendor(a,b)",1,9\n')
+        mod.run = lambda cmd, timeout, cwd=None: (0, csv_out, "", None)
+        args = type("A", (), {"timeout": 10, "excludes_all": mod.DEFAULT_EXCLUDES})()
+        leads, status, note = mod.run_lizard("lizard", root, srcs, [], args)
+        self.assertEqual(status, "ran")
+        self.assertEqual([l["file"] for l in leads], ["src/app/parser.c"])
+        self.assertEqual(leads[0]["rule"], "function-complexity")
+        self.assertIn("complexity 48, 340 lines, 7 parameter", leads[0]["message"])
+        funcs = mod.EXTRA["lizard"]
+        self.assertEqual(len(funcs), 3, "the vendored row must be dropped")
+        h = mod.code_health_metrics(funcs)
+        self.assertEqual(h["totals"]["functions"], 3)
+        self.assertEqual(h["totals"]["max_ccn"], 48)
+        self.assertEqual(h["by_directory"][0]["path"], "src/app")
+        self.assertEqual(h["by_directory"][0]["over_threshold"], 1)
+        self.assertEqual(h["worst_functions"][0]["name"], "parse")
+        self.assertEqual(h["worst_functions"][0]["over"], ["complexity", "length", "parameters"])
+        self.assertEqual(h["rating"], "poor")   # 1 of 3 over, and complexity 48 over the fair ceiling? no: 33% over
+        self.assertEqual(mod.maintainability_band(100, 2, 20)[0], "good")
+        self.assertEqual(mod.maintainability_band(100, 2, 45)[0], "fair")
+        self.assertEqual(mod.maintainability_band(100, 10, 20)[0], "fair")
+        self.assertEqual(mod.maintainability_band(100, 20, 20)[0], "poor")
+        self.assertEqual(mod.maintainability_band(100, 1, 80)[0], "poor")
+        self.assertEqual(mod.maintainability_band(0, 0, 0)[0], "unknown")
+        # layering summary over the same tree: directories name the layers, nothing crosses
+        lay = mod.layering_summary(root, srcs, [], [])
+        self.assertEqual(lay["status"], "checked")
+        self.assertEqual((lay["lower_files"], lay["upper_files"]), (1, 1))
+        self.assertEqual(lay["upward_calls"] + lay["upward_includes"] + lay["register_access_in_app"], 0)
 
     def test_osv_plan_mode_sends_nothing(self):
         out = self.path("osv")
@@ -327,6 +386,43 @@ class Renderer(TempDirTest):
         self.assertIn("Origin", csv.splitlines()[0])
         self.assertIn("not opening a browser", cp.stdout)
         self.assertNotIn("Prepared by", html)
+
+    def test_code_health_section(self):
+        """findings.json may carry code_health.json from run_static_tools.py; both outputs get a
+        Code health section, and a bad block is rejected by validation."""
+        src = load(os.path.join(FIXTURES, "findings_firmware.json"))
+        src["code_health"] = {
+            "tool": "lizard", "status": "ran", "notes": "1.17.10; 40 functions measured; 3 over thresholds",
+            "thresholds": {"ccn": 15, "nloc": 100, "params": 5},
+            "totals": {"files": 6, "functions": 40, "nloc": 1800, "avg_ccn": 6.2, "max_ccn": 41, "avg_nloc": 45.0,
+                       "over_threshold": 3, "pct_over": 7.5},
+            "by_directory": [{"path": "source/app", "files": 4, "functions": 30, "nloc": 1500, "avg_ccn": 7.1, "max_ccn": 41, "over_threshold": 3},
+                             {"path": "source/drivers", "files": 2, "functions": 10, "nloc": 300, "avg_ccn": 3.0, "max_ccn": 8, "over_threshold": 0}],
+            "worst_functions": [{"name": "mqtt_handle", "file": "source/app/mqtt.c", "line": 88, "nloc": 240, "ccn": 41, "params": 2,
+                                 "over": ["complexity", "length"]}],
+            "rating": "fair", "rating_basis": "3 of 40 functions (8%) are over the size / complexity thresholds; worst complexity 41",
+            "layering": {"status": "checked", "lower_files": 2, "upper_files": 4, "basis": ["directory"],
+                         "upward_includes": 1, "upward_calls": 0, "register_access_in_app": 0,
+                         "samples": {"layer-upward-include": [{"file": "source/drivers/relay.c", "line": 7,
+                                                              "code": "#include \"app.h\"", "header": "source/app/app.h"}]}},
+        }
+        dst = self.path("findings.json")
+        with open(dst, "w", encoding="utf-8") as fh:
+            json.dump(src, fh)
+        run(os.path.join(REVIEW, "render_report.py"), dst, "--out-dir", self.tmp, env={"FW_REVIEW_OPEN": "0"})
+        html, md = read(self.path("report.html")), read(self.path("report.md"))
+        for text in (html, md):
+            self.assertIn("Code health (maintainability)", text)
+            self.assertIn("mqtt_handle", text)
+            self.assertIn("source/drivers/relay.c", text)
+            self.assertIn("FAIR", text)
+            self.assertIn("Lizard", text)   # acknowledged
+        self.assertIn("href='#health'", html)
+        src["code_health"]["rating"] = "excellent"
+        with open(dst, "w", encoding="utf-8") as fh:
+            json.dump(src, fh)
+        cp = run(os.path.join(REVIEW, "render_report.py"), dst, "--out-dir", self.tmp, env={"FW_REVIEW_OPEN": "0"}, expect=1)
+        self.assertIn("code_health.rating", cp.stdout + cp.stderr)
 
     def test_secret_values_are_redacted(self):
         cp = self.render("findings_firmware.json")

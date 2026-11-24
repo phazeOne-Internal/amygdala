@@ -288,9 +288,9 @@ class ReviewScripts(TempDirTest):
             if tool != "lizard":   # lizard's leads are metrics over thresholds; a fixture may legitimately have none
                 self.assertGreater(sum(t["leads"] for t in d["tools"] if t["name"] == tool), 0,
                                    tool + " found no leads in a fixture full of planted defects: " + json.dumps(d["tools"]))
-        # code_health.json is always written, with the layering result even when lizard is missing
-        h = load(os.path.join(out, "code_health.json"))
-        self.assertEqual(h, d["code_health"])
+        # maintainability.json is always written, with the layering result even when lizard is missing
+        h = load(os.path.join(out, "maintainability.json"))
+        self.assertEqual(h, d["maintainability"])
         self.assertIn(h["rating"], ("good", "fair", "poor", "unknown"))
         self.assertIn(h["layering"]["status"], ("checked", "not_inferable"))
         if status["lizard"] == "ran":
@@ -327,7 +327,7 @@ class ReviewScripts(TempDirTest):
         self.assertIn("complexity 48, 340 lines, 7 parameter", leads[0]["message"])
         funcs = mod.EXTRA["lizard"]
         self.assertEqual(len(funcs), 3, "the vendored row must be dropped")
-        h = mod.code_health_metrics(funcs)
+        h = mod.maintainability_metrics(funcs)
         self.assertEqual(h["totals"]["functions"], 3)
         self.assertEqual(h["totals"]["max_ccn"], 48)
         self.assertEqual(h["by_directory"][0]["path"], "src/app")
@@ -387,11 +387,11 @@ class Renderer(TempDirTest):
         self.assertIn("not opening a browser", cp.stdout)
         self.assertNotIn("Prepared by", html)
 
-    def test_code_health_section(self):
-        """findings.json may carry code_health.json from run_static_tools.py; both outputs get a
-        Code health section, and a bad block is rejected by validation."""
+    def test_maintainability_section(self):
+        """findings.json may carry maintainability.json from run_static_tools.py; both outputs get a
+        Maintainability section, and a bad block is rejected by validation."""
         src = load(os.path.join(FIXTURES, "findings_firmware.json"))
-        src["code_health"] = {
+        src["maintainability"] = {
             "tool": "lizard", "status": "ran", "notes": "1.17.10; 40 functions measured; 3 over thresholds",
             "thresholds": {"ccn": 15, "nloc": 100, "params": 5},
             "totals": {"files": 6, "functions": 40, "nloc": 1800, "avg_ccn": 6.2, "max_ccn": 41, "avg_nloc": 45.0,
@@ -412,17 +412,17 @@ class Renderer(TempDirTest):
         run(os.path.join(REVIEW, "render_report.py"), dst, "--out-dir", self.tmp, env={"FW_REVIEW_OPEN": "0"})
         html, md = read(self.path("report.html")), read(self.path("report.md"))
         for text in (html, md):
-            self.assertIn("Code health (maintainability)", text)
+            self.assertIn("Maintainability (code health)", text)
             self.assertIn("mqtt_handle", text)
             self.assertIn("source/drivers/relay.c", text)
             self.assertIn("FAIR", text)
             self.assertIn("Lizard", text)   # acknowledged
-        self.assertIn("href='#health'", html)
-        src["code_health"]["rating"] = "excellent"
+        self.assertIn("href='#maintainability'", html)
+        src["maintainability"]["rating"] = "excellent"
         with open(dst, "w", encoding="utf-8") as fh:
             json.dump(src, fh)
         cp = run(os.path.join(REVIEW, "render_report.py"), dst, "--out-dir", self.tmp, env={"FW_REVIEW_OPEN": "0"}, expect=1)
-        self.assertIn("code_health.rating", cp.stdout + cp.stderr)
+        self.assertIn("maintainability.rating", cp.stdout + cp.stderr)
 
     def test_secret_values_are_redacted(self):
         cp = self.render("findings_firmware.json")

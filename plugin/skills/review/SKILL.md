@@ -90,7 +90,7 @@ It also checks **layering** where it can tell the layers apart (directories such
 python3 <skill-dir>/scripts/run_static_tools.py <repo-root> --check
 ```
 
-It reports, for this operating system, which of `cppcheck`, `clang-tidy`, `flawfinder`, `semgrep` and `lizard` are present, the install command for each missing one, and whether a `compile_commands.json` exists (clang-tidy needs one). `lizard` is not a bug finder: it measures every function (lines, cyclomatic complexity, parameters) for the report's Code health section, and it is a tiny pure-Python install that works everywhere, so recommend it even when the user declines the heavier analysers.
+It reports, for this operating system, which of `cppcheck`, `clang-tidy`, `flawfinder`, `semgrep` and `lizard` are present, the install command for each missing one, and whether a `compile_commands.json` exists (clang-tidy needs one). `lizard` is not a bug finder: it measures every function (lines, cyclomatic complexity, parameters) for the report's Maintainability section, and it is a tiny pure-Python install that works everywhere, so recommend it even when the user declines the heavier analysers.
 
 If any are missing, **ask the user before installing anything**. Use the AskUserQuestion tool if it's available, otherwise ask in chat. Show:
 - each missing tool, what it adds and its download size (from the `--check` output);
@@ -111,7 +111,7 @@ python3 <skill-dir>/scripts/run_static_tools.py <repo-root> --out-dir <out-dir> 
 
 The script runs the tools in parallel over first-party code only, using the skill's own embedded-firmware semgrep rules (`assets/semgrep/embedded-c.yml`) with metrics off, so nothing leaves the machine. It merges results by file:line into `static_leads.md` and `static_leads.json`; lines flagged by several tools come first. Copy the per-tool status from `static_leads.json` into the report's `tools` section, including tools that were skipped and why.
 
-The same run writes `code_health.json`: lizard's function metrics summarised per directory, the worst functions, a good / fair / poor maintainability band with the numbers it came from, and the layering check (driver code including application headers or calling application functions, application code writing registers). Copy it unchanged into `findings.json` as the top-level `code_health` value; the renderer turns it into the **Code health (maintainability)** section. It is written even when lizard is missing, so the layering result always reaches the report. When you can see the layers but the script could not (it says `not_inferable`), re-run with `--layer lower=<path> --layer upper=<path>`, the same option `hotspots.py` takes.
+The same run writes `maintainability.json`: lizard's function metrics summarised per directory, the worst functions, a good / fair / poor maintainability band with the numbers it came from, and the layering check (driver code including application headers or calling application functions, application code writing registers). Copy it unchanged into `findings.json` as the top-level `maintainability` value; the renderer turns it into the **Maintainability (code health)** section. It is written even when lizard is missing, so the layering result always reaches the report. When you can see the layers but the script could not (it says `not_inferable`), re-run with `--layer lower=<path> --layer upper=<path>`, the same option `hotspots.py` takes.
 
 **All of these are leads, not findings.** Many will be false positives, for example printf-format warnings caused by host-vs-ARM type sizes, or flawfinder flagging every `memcpy`. Some real bugs won't appear at all, especially ones that span functions, such as an ISR calling a helper that blocks. Use the leads to decide where to read first. Every lead you report must pass the verification in step 5.
 
@@ -146,7 +146,7 @@ Read the code. Work through the areas in roughly this order, since this is where
 6. **Persistent storage and power** — flash write frequency and wear, atomic config updates, brown-out, sleep/wake.
 7. **Long-running behaviour** — tick/counter wraparound, leaks, heap fragmentation, stack sizing.
 8. **Field readiness and regulatory** — diagnostics, versioning, factory reset, default passwords, update support.
-9. **Code quality and style** — only after the above; it matters, but it rarely ranks above a Red. Include architecture here: dependency direction between layers (drivers must not call up into the application), and whether the build enforces it. Use `code_health.json` for the evidence: a function over the complexity or length threshold in a parser, state machine or OTA path is an Amber code-quality finding that cites its numbers; a `poor` band is worth one finding about the directories that carry it, not one per function.
+9. **Code quality and style** — only after the above; it matters, but it rarely ranks above a Red. Include architecture here: dependency direction between layers (drivers must not call up into the application), and whether the build enforces it. Use `maintainability.json` for the evidence: a function over the complexity or length threshold in a parser, state machine or OTA path is an Amber code-quality finding that cites its numbers; a `poor` band is worth one finding about the directories that carry it, not one per function.
 
 For a large codebase (roughly more than 30k lines of first-party code), you may split areas across parallel subagents. Give each one the relevant reference files, the area to cover, the first-party paths, and ask it to return candidate findings in the `findings.json` finding format with evidence. You remain responsible for verifying and rating everything they return.
 
@@ -175,7 +175,7 @@ Also note genuine strengths (e.g. "signed OTA with downgrade protection is corre
 
 ### 7. Write the report
 
-Write `findings.json` following the schema in `references/report-format.md`, including `code_health` copied from `code_health.json`. Set `project.review_date` to the date **and time** the review was run, local time, `YYYY-MM-DD HH:MM`, taken from the clock (for example with `date '+%Y-%m-%d %H:%M'`), so readers can tell which run a report came from. Then render it:
+Write `findings.json` following the schema in `references/report-format.md`, including `maintainability` copied from `maintainability.json`. Set `project.review_date` to the date **and time** the review was run, local time, `YYYY-MM-DD HH:MM`, taken from the clock (for example with `date '+%Y-%m-%d %H:%M'`), so readers can tell which run a report came from. Then render it:
 
 ```bash
 python3 <skill-dir>/scripts/render_report.py <out-dir>/findings.json --out-dir <out-dir> --open

@@ -206,16 +206,16 @@ def validate(d):
         if f.get("rag") == "red" and f.get("confidence") == "needs-verification":
             warns.append(f"{where}: Red finding with confidence 'needs-verification' — consider Amber, or verify it")
     seen_areas = set()
-    ch = d.get("code_health")
+    ch = d.get("maintainability")
     if ch is not None:
         if not isinstance(ch, dict):
-            errs.append("code_health must be an object (copy code_health.json from run_static_tools.py)")
+            errs.append("maintainability must be an object (copy maintainability.json from run_static_tools.py)")
         else:
             if ch.get("rating") not in (None, "good", "fair", "poor", "unknown"):
-                errs.append("code_health.rating must be good, fair, poor or unknown")
+                errs.append("maintainability.rating must be good, fair, poor or unknown")
             for k, typ in (("totals", dict), ("by_directory", list), ("worst_functions", list), ("layering", dict)):
                 if k in ch and not isinstance(ch[k], typ):
-                    errs.append(f"code_health.{k} must be a {typ.__name__}")
+                    errs.append(f"maintainability.{k} must be a {typ.__name__}")
     for i, c in enumerate(d.get("coverage", [])):
         if c.get("area") not in CAT_LABEL:
             errs.append(f"coverage[{i}]: area '{c.get('area')}' not a valid category")
@@ -322,7 +322,7 @@ th{background:var(--navy);font-weight:500;font-size:12px;color:#fff;text-transfo
 .badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;letter-spacing:.6px;white-space:nowrap}
 .badge.red{background:var(--red);color:#fff}.badge.amber{background:var(--amber-solid);color:#2b1a00}.badge.green{background:var(--green);color:#fff}
 .badge.good{background:var(--green);color:#fff}.badge.fair{background:var(--amber-solid);color:#2b1a00}.badge.poor{background:var(--red);color:#fff}.badge.unknown{background:var(--grey-bg);color:var(--grey);border:1px solid #d1d5db}
-.health .over{color:var(--red);font-weight:600}.health .num{text-align:right}
+.maint .over{color:var(--red);font-weight:600}.maint .num{text-align:right}
 .badge.grey{background:var(--grey-bg);color:var(--grey);border:1px solid #d1d5db}.badge.partial{background:#fff;color:var(--amber);border:1.5px solid var(--amber-solid)}
 .chip{display:inline-block;padding:1px 8px;border-radius:6px;background:var(--grey-bg);font-size:12px;color:#374151;margin:0 4px 4px 0}
 code,pre{font-family:var(--mono);font-size:12.5px}
@@ -480,8 +480,8 @@ def acknowledgements(d):
     """Credit lines for the tools that ran, the standards drawn on, and the typeface."""
     ran = []
     entries = list(d.get("tools", []) or [])
-    ch = d.get("code_health") or {}
-    if isinstance(ch, dict) and ch.get("tool"):   # lizard's status lives in code_health, not necessarily in tools[]
+    ch = d.get("maintainability") or {}
+    if isinstance(ch, dict) and ch.get("tool"):   # lizard's status lives in maintainability, not necessarily in tools[]
         entries.append({"name": ch["tool"], "status": ch.get("status")})
     for t in entries:
         name = str(t.get("name", "")).lower()
@@ -506,11 +506,11 @@ def generated_stamp():
     return now.strftime("%Y-%m-%d %H:%M %Z (UTC%z)")
 
 
-HEALTH_INTRO = ("How hard this code is to change safely, measured rather than judged: function size and cyclomatic "
+MAINT_INTRO = ("How hard this code is to change safely, measured rather than judged: function size and cyclomatic "
                 "complexity per directory, and whether the driver and application layers stay apart. It is independent "
                 "of the findings above: tidy code can hide a Red, and messy code can be correct today, but messy code is "
                 "where the next defect is written.")
-HEALTH_BAND = {
+MAINT_BAND = {
     "good": "Most functions are small and testable; keep it that way with a complexity gate in CI.",
     "fair": "A minority of functions carry most of the complexity; refactor the worst before adding features.",
     "poor": "Complexity is widespread; changes here are slow and risky, and reviews cannot keep up. Budget for refactoring.",
@@ -540,14 +540,14 @@ def layering_summary_text(lay):
                    f"{lay.get('register_access_in_app', 0)} direct register write(s) in application code.")
 
 
-def code_health_html(ch):
+def maintainability_html(ch):
     out = []
     a = out.append
     band = ch.get("rating", "unknown")
-    a(h2("Code health (maintainability)", "health") + "<div class='card health'>")
-    a(f"<p><span class='badge {e(band)}'>{e(band.upper())}</span> &nbsp;{e(HEALTH_BAND.get(band, ''))}"
+    a(h2("Maintainability (code health)", "maintainability") + "<div class='card maint'>")
+    a(f"<p><span class='badge {e(band)}'>{e(band.upper())}</span> &nbsp;{e(MAINT_BAND.get(band, ''))}"
       + (f"<br><span class='small'>{e(ch['rating_basis'])}.</span>" if ch.get("rating_basis") else "") + "</p>")
-    a(f"<p class='small'>{e(HEALTH_INTRO)}</p>")
+    a(f"<p class='small'>{e(MAINT_INTRO)}</p>")
     t = ch.get("totals")
     if t:
         a("<table><tr><th>Functions</th><th>Files</th><th>Lines of code</th><th>Avg complexity</th><th>Max complexity</th><th>Over thresholds</th></tr>"
@@ -592,13 +592,13 @@ def code_health_html(ch):
     return "".join(out)
 
 
-def code_health_md(ch):
+def maintainability_md(ch):
     L = []
     a = L.append
     band = ch.get("rating", "unknown")
-    a("## Code health (maintainability)\n")
-    a(f"**{band.upper()}** — {HEALTH_BAND.get(band, '')}" + (f" {ch['rating_basis']}." if ch.get("rating_basis") else "") + "\n")
-    a(f"_{HEALTH_INTRO}_\n")
+    a("## Maintainability (code health)\n")
+    a(f"**{band.upper()}** — {MAINT_BAND.get(band, '')}" + (f" {ch['rating_basis']}." if ch.get("rating_basis") else "") + "\n")
+    a(f"_{MAINT_INTRO}_\n")
     t = ch.get("totals")
     if t:
         a("| Functions | Files | Lines of code | Avg complexity | Max complexity | Over thresholds |\n|---|---|---|---|---|---|\n"
@@ -650,7 +650,7 @@ def render_html(d, findings, counts, verdict, score):
       f"<a class='logo' href='{e(BRAND['url'])}' target='_blank' rel='noopener' title='{e(BRAND['tagline'])}'>"
       f"<span class='word'>{e(BRAND['name'])}</span>{BRAND_LOGO_SVG}</a>"
       "<nav><a class='lnk' href='#summary'>Summary</a><a class='lnk' href='#scorecard'>Scorecard</a><a class='lnk' href='#findings'>Findings</a>"
-      + ("<a class='lnk' href='#health'>Code health</a>" if d.get("code_health") else "")
+      + ("<a class='lnk' href='#maintainability'>Maintainability</a>" if d.get("maintainability") else "")
       + f"<a class='btn outline' href='{contact}' target='_blank' rel='noopener'>Get in touch<span class='arr'>&rarr;</span></a></nav>"
       "</div></header>")
     a(f"<section class='hero'><div class='wrap'>"
@@ -740,8 +740,8 @@ def render_html(d, findings, counts, verdict, score):
         a("<h4>Recommendation</h4>" + para(f["recommendation"]))
         a("</div></details>")
 
-    if d.get("code_health"):
-        a(code_health_html(d["code_health"]))
+    if d.get("maintainability"):
+        a(maintainability_html(d["maintainability"]))
 
     if d.get("next_steps"):
         a("" + h2("Recommended next steps") + "<div class='card'><ol>" + "".join(f"<li>{e(x)}</li>" for x in d["next_steps"]) + "</ol></div>")
@@ -863,8 +863,8 @@ def render_md(d, findings, counts, verdict, score):
             if f.get("status") and (res.get("note") or res.get("commit")):
                 a(f"**Resolution.** {STATUSES[status_of(f)]}" + (f" — commit `{res['commit']}`" if res.get("commit") else "")
                   + (f" ({res['date']})" if res.get("date") else "") + (f". {res['note']}" if res.get("note") else "") + "\n")
-    if d.get("code_health"):
-        a(code_health_md(d["code_health"]))
+    if d.get("maintainability"):
+        a(maintainability_md(d["maintainability"]))
     if d.get("next_steps"):
         a("## Recommended next steps\n\n" + "\n".join(f"{i + 1}. {x}" for i, x in enumerate(d["next_steps"])) + "\n")
     a("## Coverage and method\n")

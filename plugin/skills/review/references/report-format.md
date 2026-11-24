@@ -76,14 +76,14 @@ Each **area** in the scorecard takes the worst rating of its findings. An area w
     }
   ],
   "next_steps": ["Optional ordered list of recommended actions beyond individual findings, e.g. 'Add cppcheck and -Werror to CI'"],
-  "code_health": { "...": "optional: paste code_health.json from run_static_tools.py unchanged; see below" }
+  "maintainability": { "...": "optional: paste maintainability.json from run_static_tools.py unchanged; see below" }
 }
 ```
 
-### `code_health` (optional, mechanical)
+### `maintainability` (optional, mechanical)
 
-`run_static_tools.py` writes `code_health.json` next to `static_leads.json`. Copy it into `findings.json` as the top-level
-`code_health` value without editing it; the renderer draws the **Code health (maintainability)** section from it. It holds:
+`run_static_tools.py` writes `maintainability.json` next to `static_leads.json`. Copy it into `findings.json` as the top-level
+`maintainability` value without editing it; the renderer draws the **Maintainability (code health)** section from it. It holds:
 
 - `tool`, `status`, `notes`: lizard's run status, same values as `tools[].status`. When lizard was not installed the section
   still appears, says so, and shows the layering result alone.

@@ -17,9 +17,9 @@ Usage:
          [--exclude DIR ...] [--compile-db PATH] [--misra] [--timeout SECONDS] [--jobs N]
          [--layer lower|upper=<path-prefix> ...]
 
-Also writes code_health.json: function size / complexity metrics from lizard (per directory, worst
+Also writes maintainability.json: function size / complexity metrics from lizard (per directory, worst
 functions, a good / fair / poor maintainability band) plus the layering check from hotspots.py, in the
-shape the report's "code_health" section takes. Copy it into findings.json as-is.
+shape the report's "maintainability" section takes. Copy it into findings.json as-is.
 
 Leads are NOT findings: every one must be read in context before it goes in the report.
 Nothing is sent off the machine: semgrep runs with --metrics=off and only the bundled local rules.
@@ -124,7 +124,7 @@ TOOLS = {
     },
     "lizard": {
         "purpose": "Function size and complexity metrics (lines, cyclomatic complexity, parameters) for every "
-                   "function, summarised per directory in the report's Code health section. Pure Python, no build "
+                   "function, summarised per directory in the report's Maintainability section. Pure Python, no build "
                    "setup, works on every platform.",
         "exe": ["lizard"],
         "extra_paths": {},
@@ -528,7 +528,7 @@ def maintainability_band(functions, over, max_ccn):
     return "poor", basis
 
 
-def code_health_metrics(funcs):
+def maintainability_metrics(funcs):
     """Totals, per-directory table and worst functions, from lizard's per-function rows."""
     if not funcs:
         return None
@@ -568,7 +568,7 @@ def code_health_metrics(funcs):
 
 def layering_summary(root, srcs, incs, overrides, max_samples=5):
     """The hotspots.py layering check (driver code reaching up into application code, application code
-    writing registers) in summary form, so code_health.json carries structure as well as size."""
+    writing registers) in summary form, so maintainability.json carries structure as well as size."""
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import hotspots  # noqa: E402  (sibling script; same bundled rules as the pattern scan)
     files = list(srcs)
@@ -688,21 +688,21 @@ def main():
         m["hits"].append({x: l.get(x) for x in ("tool", "rule", "severity", "cwe", "message")})
     ordered = sorted(merged.values(), key=lambda m: (-len({h["tool"] for h in m["hits"]}), m["file"], m["line"]))
 
-    # Code health: lizard's metrics (when it ran) plus the layering check, in the report's code_health shape.
+    # Maintainability: lizard's metrics (when it ran) plus the layering check, in the report's maintainability shape.
     lz = next((s for s in status if s["name"] == "lizard"), None)
-    health = {"tool": "lizard", "status": lz["status"] if lz else "skipped",
+    mt = {"tool": "lizard", "status": lz["status"] if lz else "skipped",
               "notes": lz["notes"] if lz else "lizard not selected with --tools"}
-    metrics = code_health_metrics(EXTRA.get("lizard", []))
+    metrics = maintainability_metrics(EXTRA.get("lizard", []))
     if metrics:
-        health.update(metrics)
+        mt.update(metrics)
     else:
-        health.update({"rating": "unknown", "rating_basis": "no function metrics: " + health["notes"]})
-    health["layering"] = layering_summary(root, srcs, incs, parse_layer_overrides(args.layer))
-    with open(os.path.join(out_dir, "code_health.json"), "w", encoding="utf-8") as fh:
-        json.dump(health, fh, indent=2)
+        mt.update({"rating": "unknown", "rating_basis": "no function metrics: " + mt["notes"]})
+    mt["layering"] = layering_summary(root, srcs, incs, parse_layer_overrides(args.layer))
+    with open(os.path.join(out_dir, "maintainability.json"), "w", encoding="utf-8") as fh:
+        json.dump(mt, fh, indent=2)
 
     with open(os.path.join(out_dir, "static_leads.json"), "w", encoding="utf-8") as fh:
-        json.dump({"tools": status, "first_party_sources": len(srcs), "leads": ordered, "code_health": health}, fh, indent=2)
+        json.dump({"tools": status, "first_party_sources": len(srcs), "leads": ordered, "maintainability": mt}, fh, indent=2)
     with open(os.path.join(out_dir, "static_leads.md"), "w", encoding="utf-8") as fh:
         fh.write(f"# Static analysis leads\n\n{len(srcs)} first-party source files. "
                  "**Leads, not findings — read each in context.** Lines flagged by several tools are listed first.\n\n")
@@ -716,19 +716,19 @@ def main():
             for h in m["hits"]:
                 cwe = f" CWE-{h['cwe']}" if h.get("cwe") and str(h["cwe"]).isdigit() else (f" {h['cwe']}" if h.get("cwe") else "")
                 fh.write(f"  - {h['tool']} `{h['rule']}` [{h['severity']}{cwe}] {h['message']}\n")
-        fh.write("\n## Code health\n\n")
-        fh.write(code_health_md(health))
+        fh.write("\n## Maintainability\n\n")
+        fh.write(maintainability_md(mt))
     for s in status:
         print(f"{s['name']:<11} {s['status']:<14} {s['leads']:>4} leads  {s['notes'][:140]}")
     print(f"{len(ordered)} merged locations -> {os.path.join(out_dir, 'static_leads.md')}")
-    lay = health["layering"]
-    print(f"code health: {health['rating']} ({health['rating_basis']}); layering {lay['status']}"
+    lay = mt["layering"]
+    print(f"maintainability: {mt['rating']} ({mt['rating_basis']}); layering {lay['status']}"
           + (f": {lay['upward_includes']} upward include(s), {lay['upward_calls']} upward call(s), "
              f"{lay['register_access_in_app']} register write(s) in application code" if lay["status"] == "checked" else "")
-          + f" -> {os.path.join(out_dir, 'code_health.json')}")
+          + f" -> {os.path.join(out_dir, 'maintainability.json')}")
 
 
-def code_health_md(h):
+def maintainability_md(h):
     L = []
     L.append(f"Maintainability: **{h['rating']}** ({h['rating_basis']}). Metrics from lizard: {h['status']}, {h['notes']}.\n")
     if h.get("totals"):

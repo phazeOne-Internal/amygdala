@@ -1,6 +1,6 @@
 # Firmware review — 2025 eCTF insecure example decoder (MITRE reference design)
 
-**Date:** 2026-11-20 19:46 · **Generated:** 2026-11-24 21:38 GMT (UTC+0000) · **Version:** 2025 eCTF insecure example (reference design snapshot, Apache-2.0) · **Reviewer:** ./phazeOne amygdala:review  
+**Date:** 2026-11-20 19:46 · **Generated:** 2026-11-24 21:43 GMT (UTC+0000) · **Version:** 2025 eCTF insecure example (reference design snapshot, Apache-2.0) · **Reviewer:** ./phazeOne amygdala:review  
 **Platform:** Analog Devices MAX78000 (FTHR_RevA) · MSDK v2024_02 · bare-metal superloop, no RTOS · UART host link at 115200 baud · frames relayed from a TCP 'satellite' broadcast by host tooling (detection confidence: high)  
 **Scope:** 22 first-party files, ~1,982 lines in `decoder/src/`, `decoder/inc/`, `decoder/startup_firmware.S`, `decoder/firmware.ld`, `decoder/Makefile`, `decoder/project.mk`, `decoder/Dockerfile`, `design/ectf25_design/`
 
@@ -586,7 +586,7 @@ for (int i = 0; i < MAX_CHANNEL_COUNT; i++){
 
 **Recommendation.** Zero the array first (memset or = {0}) before setting the defaults.
 
-## Code health (maintainability)
+## Maintainability (code health)
 
 **GOOD** — Most functions are small and testable; keep it that way with a complexity gate in CI. 0 of 30 functions (0%) are over the size / complexity thresholds; worst complexity 9.
 
@@ -640,7 +640,7 @@ Thresholds: complexity > 15, > 100 lines, > 5 parameters. Functions over a thres
 | flawfinder | ran | 2.0.20; min level 2; 5 leads (sprintf / memcpy), all with bounded sources; folded into FW-019 |
 | semgrep | ran | 1.186.0; bundled embedded-c rules, local only, metrics off; 6 leads (ISR printf became FW-007) |
 | OSV.dev dependency lookup | skipped | skipped (no consent): no user was available to approve sending dependency URLs to api.osv.dev; the plan found no machine-readable dependency manifests in any case |
-| lizard | ran | 30 functions measured; 0 over thresholds (complexity > 15, > 100 lines, > 5 parameters); see Code health |
+| lizard | ran | 30 functions measured; 0 over thresholds (complexity > 15, > 100 lines, > 5 parameters); see Maintainability |
 
 Excluded (vendored / generated): `tools/ (host test and harness tooling, light review only)`, `MSDK v2024_02 (not vendored; fetched at build time in the Dockerfile)`, `eCTF bootloader (not in repository)`. Third-party code was assessed for versions and configuration, not line-by-line.
 

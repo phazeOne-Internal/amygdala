@@ -138,7 +138,7 @@
     {
       "name": "lizard",
       "status": "ran",
-      "notes": "30 functions measured; 0 over thresholds (complexity > 15, > 100 lines, > 5 parameters); see Code health"
+      "notes": "30 functions measured; 0 over thresholds (complexity > 15, > 100 lines, > 5 parameters); see Maintainability"
     }
   ],
   "findings": [
@@ -800,7 +800,7 @@
     "Add host-side unit and fuzz tests for read_packet() and the command handlers, plus -Wextra and cppcheck/semgrep in CI (FW-018).",
     "Obtain the bootloader and confirm image signing, rollback protection and debug lock (FW-013, FW-014); generate a compile_commands.json with 'bear -- make' so clang-tidy can run next time."
   ],
-  "code_health": {
+  "maintainability": {
     "tool": "lizard",
     "status": "ran",
     "notes": "1.26.1; 30 functions measured; 0 over thresholds (complexity > 15, > 100 lines, > 5 parameters)",

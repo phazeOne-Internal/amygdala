@@ -21,7 +21,7 @@ The developer Markdown, CSV, SBOM and notices files, and how the reports were pr
 
 - Claude Code.
 - Python 3.8 or later on PATH as `python3` (macOS / Linux) or `py` / `python` (Windows). Every bundled script needs it. Each skill checks for it first and, if it is missing, shows the install command for your OS and asks before running it. On Windows use a python.org build or `winget install Python.Python.3.12`; the Microsoft Store stub is not enough.
-- Optional: cppcheck, clang-tidy, flawfinder, semgrep and lizard (review) and ScanCode Toolkit (oss). The skills detect what is installed, show the install commands for anything missing, and never install without a yes. Lizard is the one to have even if you skip the rest: it measures function size and complexity for the report's Code health section and is a tiny pure-Python install.
+- Optional: cppcheck, clang-tidy, flawfinder, semgrep and lizard (review) and ScanCode Toolkit (oss). The skills detect what is installed, show the install commands for anything missing, and never install without a yes. Lizard is the one to have even if you skip the rest: it measures function size and complexity for the report's Maintainability section and is a tiny pure-Python install.
 
 ## Install
 

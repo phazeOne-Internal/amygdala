@@ -13,6 +13,6 @@ How they were produced, on macOS with cppcheck, flawfinder, semgrep, lizard and 
 - The optional OSV.dev dependency lookup was skipped because nobody was present to consent to it; the report records "skipped (no consent)".
 - The one edit to the tool output: `project.repo_path` in each `findings.json` was replaced with the fixture name, because it held a temporary folder path.
 - Secret values the review found are redacted in every file, as the skill requires.
-- The review's **Code health** section (function size and complexity from lizard, plus the layering check) was added after the first run by re-running `run_static_tools.py --tools lizard` on the same source and copying its `code_health.json` into `findings.json`. The decoder rates *good* on maintainability while carrying five Reds, which is the point of keeping the two apart: tidy code can still be wrong.
+- The review's **Maintainability** section (function size and complexity from lizard, plus the layering check) was added after the first run by re-running `run_static_tools.py --tools lizard` on the same source and copying its `maintainability.json` into `findings.json`. The decoder rates *good* on maintainability while carrying five Reds, which is the point of keeping the two apart: tidy code can still be wrong.
 
 `report.html` is the engineering-manager view and `report.md` the developer view of the same `findings.json`. The OSS notices file is the skill's draft, with the gaps it could not fill left visible.

@@ -1,0 +1,49 @@
+{
+  "_comment": "Copy to the root of the firmware repository as amygdala-ci.json. Every key is optional; these are the defaults, with notes. Unknown keys fail the run so a typo cannot silently disable a gate.",
+
+  "project": {"name": null, "version": null},
+
+  "exclude": [],
+  "_exclude": "Extra vendored or generated directory names to skip, on top of the built-in list (mtb_shared, libs, deps, third_party, build, ...). The output directory is always skipped.",
+
+  "layers": {"lower": [], "upper": []},
+  "_layers": "Path prefixes that are driver / HAL / BSP code (lower) and application code (upper), for the layering check when the directory names do not make it obvious. Example: {\"lower\": [\"source/drivers/\"], \"upper\": [\"source/app/\"]}.",
+
+  "compile_db": null,
+  "_compile_db": "Path to compile_commands.json, relative to the root, so clang-tidy can run.",
+
+  "tools": null,
+  "_tools": "Static tools to run, e.g. [\"cppcheck\", \"lizard\"]. null runs everything that is installed.",
+
+  "timeout": 1800,
+
+  "osv": {"send": false, "deps": []},
+  "_osv": "send: true is the ONLY setting that lets data leave the runner: the public repository URL and tag of each third-party component go to api.osv.dev. Nothing else is sent. deps adds components the manifests do not list, as URL@TAG.",
+
+  "licences": {"run_scancode": false, "maps": [], "confirmed_components": null},
+  "_licences": "run_scancode runs ScanCode Toolkit if it is installed. maps lists linker map files that prove what is linked into the image. confirmed_components points at the confirmed_components.json a reviewer wrote with amygdala:oss; the sbom step is skipped without it, because an SBOM is never guessed.",
+
+  "baseline": "amygdala-ci-baseline.json",
+  "_baseline": "Committed file of accepted leads. Gates fail only on items that are not in it. Create or refresh it with `amygdala_ci.py baseline` after deliberately accepting the current state, and say why in the commit message. Without a baseline every item counts as new.",
+
+  "gates": {
+    "required_tools": [],
+    "hotspot_rules": ["private-key", "hardcoded-password", "tls-verify-off", "ota-validate-off", "sample-signing-key", "isr-blocking-in-isr"],
+    "static_min_tools": 2,
+    "static_errors": true,
+    "new_functions_over_thresholds": true,
+    "maintainability_rating": "poor",
+    "vulnerabilities": true,
+    "licence_families": ["strong", "network", "nc"]
+  },
+  "_gates": {
+    "required_tools": "Tool names that must have run, otherwise the build fails. [\"lizard\"] is a good minimum: it is a pure-Python install and feeds the Maintainability section.",
+    "hotspot_rules": "Pattern rules from hotspots.py whose NEW hits fail the build. The default set is the high-signal one: embedded private keys and passwords, TLS verification off, image validation off, sample signing keys, blocking calls inside an interrupt handler.",
+    "static_min_tools": "A NEW line flagged by this many independent analysers fails. 0 disables.",
+    "static_errors": "A NEW analyser lead rated error (not warning) fails.",
+    "new_functions_over_thresholds": "A NEW function over lizard's thresholds (complexity > 15, > 100 lines, > 5 parameters) fails.",
+    "maintainability_rating": "Fail when the whole-codebase band is this bad or worse: \"poor\", \"fair\", or null to disable. This gate is absolute, not baseline-relative.",
+    "vulnerabilities": "A NEW published advisory for a third-party component fails. Only evaluated when osv.send is true.",
+    "licence_families": "A NEW third-party component whose most restrictive licence family is listed fails. Families: strong (GPL), network (AGPL / SSPL), weak (LGPL / MPL), nc (non-commercial), restricted, proprietary, permissive, public-domain, none-found, unknown."
+  }
+}

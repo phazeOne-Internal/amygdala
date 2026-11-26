@@ -2,8 +2,8 @@
 
 Used by CI only. It never installs anything on a developer's machine unless run by hand.
 
-    python tests/install_tools.py static cppcheck flawfinder semgrep
-    python tests/install_tools.py scancode
+    python ci/install_tools.py static cppcheck flawfinder semgrep
+    python ci/install_tools.py scancode
 
 `static` reads the install commands for this operating system from
 `run_static_tools.py --check` (so the advice the skill gives users is what gets tested), runs them
@@ -15,7 +15,7 @@ import os
 import subprocess
 import sys
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # repository root; this file lives in ci/
 REVIEW = os.path.join(ROOT, "plugin", "skills", "review", "scripts")
 OSS = os.path.join(ROOT, "plugin", "skills", "oss", "scripts")
 ENV = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUTF8="1")

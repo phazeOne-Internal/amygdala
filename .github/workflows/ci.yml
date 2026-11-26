@@ -57,12 +57,56 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install cppcheck, flawfinder, semgrep and lizard using the commands run_static_tools.py --check prints
-        run: python tests/install_tools.py static cppcheck flawfinder semgrep lizard
+        run: python ci/install_tools.py static cppcheck flawfinder semgrep lizard
       - name: Run the script test suite with the analysers required to run
         env:
           FW_TEST_REQUIRE_TOOLS: cppcheck,flawfinder,semgrep,lizard
           SEMGREP_SEND_METRICS: "off"
         run: python -m unittest discover -s tests -v
+
+  pipeline:
+    name: CI entry point on the eCTF fixture (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install the analysers the way the skill tells users to
+        run: python ci/install_tools.py static cppcheck flawfinder semgrep lizard
+      - name: Check tools and configuration
+        run: python ci/amygdala_ci.py check --root evals/review/ectf-2025-insecure-example --config ci/amygdala-ci.example.json
+      - name: Run every step with no baseline (the fixture is defective on purpose, so the gates must fail)
+        shell: bash
+        env:
+          SEMGREP_SEND_METRICS: "off"
+        run: |
+          set +e
+          python ci/amygdala_ci.py all --root evals/review/ectf-2025-insecure-example --out-dir "$RUNNER_TEMP/amygdala-ci" --baseline "$RUNNER_TEMP/baseline.json"
+          code=$?
+          set -e
+          echo "exit code $code"
+          test "$code" -eq 1
+          test -f "$RUNNER_TEMP/amygdala-ci/leads.sarif"
+          test -f "$RUNNER_TEMP/amygdala-ci/junit.xml"
+          test ! -f "$RUNNER_TEMP/amygdala-ci/osv_leads.json"   # nothing was sent
+      - name: Accept the current state as the baseline, then the gates must pass
+        shell: bash
+        run: |
+          python ci/amygdala_ci.py baseline --root evals/review/ectf-2025-insecure-example --out-dir "$RUNNER_TEMP/amygdala-ci" --baseline "$RUNNER_TEMP/baseline.json"
+          python ci/amygdala_ci.py report --root evals/review/ectf-2025-insecure-example --out-dir "$RUNNER_TEMP/amygdala-ci" --baseline "$RUNNER_TEMP/baseline.json"
+      - name: Publish the gate results as test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: amygdala-ci-${{ matrix.os }}
+          path: ${{ runner.temp }}/amygdala-ci
+          if-no-files-found: error
 
   scancode:
     name: ScanCode installed by install_scancode.py (${{ matrix.os }})
@@ -78,7 +122,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install ScanCode Toolkit with the skill's installer
-        run: python tests/install_tools.py scancode
+        run: python ci/install_tools.py scancode
       - name: Run the script test suite with a real ScanCode scan
         env:
           FW_TEST_REQUIRE_SCANCODE: "1"

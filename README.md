@@ -7,6 +7,7 @@ A Claude Code plugin from ./phazeOne that spots the dangers in embedded / IoT fi
 | `amygdala:review` | Reviews a whole firmware codebase (memory safety, security, secure boot / OTA, robustness, concurrency, hardware and power, dependencies, field diagnostics, code quality, IoT regulation) and produces a RAG-rated report: `report.html` for engineering managers, `report.md` for developers, `findings.csv` for Jira / ADO. Auto-detects the platform (PSoC 6 / ModusToolbox, Zephyr, nRF Connect, ESP-IDF, STM32, FreeRTOS, bare metal). |
 | `amygdala:oss` | Scans a codebase for open-source licence risk, works out what ships and how it is linked, and produces a RAG licence report, a draft THIRD_PARTY_NOTICES file and a CycloneDX SBOM. |
 | `amygdala:fix` | Works through the findings of a `amygdala:review` report one at a time, Red first, with one commit per finding and a status update in the report. |
+| CI/CD (`ci/amygdala_ci.py`) | The same checks without the model, for GitHub Actions, GitLab, Azure DevOps or any runner with Python: pattern and analyser leads, function metrics and the maintainability band, licence inventory and the opt-in vulnerability lookup, gated against a committed baseline so only new items fail the build. Writes SARIF, JUnit and the branded report. No code leaves the runner. See [ci/README.md](ci/README.md). |
 
 ## Example reports
 
@@ -57,6 +58,11 @@ evals/
   oss/                             eval cases for amygdala:oss
   fix/                             eval cases for amygdala:fix (findings file + git baseline; checks the one-fix-at-a-time workflow)
   run.py                           runs the cases through claude plugin eval
+ci/
+  amygdala_ci.py                   CI/CD entry point: steps, baseline, gates, SARIF, JUnit, exit codes
+  amygdala-ci.example.json         every config key, documented
+  install_tools.py                 installs the analysers the way the skill tells users to (used by CI)
+  README.md                        gates, baseline workflow, pipeline examples
 docs/examples/                     example reports (served by GitHub Pages)
 tests/                             script test suite and its two sample findings files
 ```
@@ -69,6 +75,17 @@ Scripts are plain Python 3 (3.8 or later) with no third-party dependencies and r
 - **Licence review**: ask about licences, copyleft, an SBOM or a notices file, or invoke `/amygdala:oss`.
 - **Fixing findings**: invoke `/amygdala:fix` with the `findings.json` from a review. It fixes one finding at a time and pauses for approval after each.
 - **Without the plugin**: each folder under `plugin/skills/` is also a standalone skill. Copy it into a project's `.claude/skills/` or into `~/.claude/skills/`; `amygdala:fix` looks for the review skill's renderer next to itself and in those two locations.
+
+## In a CI/CD pipeline
+
+`ci/amygdala_ci.py` runs the deterministic part of the review and licence skills without a model, so it costs nothing per run and the code never leaves the runner:
+
+```
+python3 ci/amygdala_ci.py all --root <firmware-repo>        # every step; exit 1 if a gate fails
+python3 ci/amygdala_ci.py baseline --root <firmware-repo>   # accept the current leads; commit the file
+```
+
+Steps (`platform`, `hotspots`, `static`, `maintainability`, `vulns`, `licences`, `sbom`, `report`) can run one per job. Gates fail only on items that are new since the committed baseline: gated pattern rules such as an embedded private key or TLS verification switched off, a line that several analysers flag, a new function over the size and complexity thresholds, the whole-codebase maintainability band, a new published advisory for a third-party component (only when the OSV.dev lookup is enabled in the config), and a new component in a copyleft or non-commercial licence family. The output is the branded report with a CI profile that says plainly it is not a code review, plus `leads.sarif` for GitHub code scanning, GitLab or Azure DevOps, `junit.xml` for the native test views, and a GitHub step summary. Configuration is a JSON file documented in [ci/amygdala-ci.example.json](ci/amygdala-ci.example.json); [ci/README.md](ci/README.md) has the gates, the baseline workflow and a GitHub Actions example.
 
 ## Evals
 
@@ -85,8 +102,9 @@ python -m unittest discover -s tests -v
 GitHub Actions (`.github/workflows/ci.yml`) runs it on every pull request and push to `main`:
 
 - the suite on Ubuntu, Windows and macOS with the oldest supported Python and the current one;
-- on each of the three, a job that installs cppcheck, flawfinder, semgrep and lizard using the exact commands `run_static_tools.py --check` prints for that operating system (`tests/install_tools.py`), then requires all four to run on the fixture, so the install advice the skill gives users is tested, not just typed;
+- on each of the three, a job that installs cppcheck, flawfinder, semgrep and lizard using the exact commands `run_static_tools.py --check` prints for that operating system (`ci/install_tools.py`), then requires all four to run on the fixture, so the install advice the skill gives users is tested, not just typed;
 - on each of the three, a job that installs ScanCode Toolkit with `install_scancode.py --yes` (including the libmagic prerequisite on Apple Silicon) and runs a real `--run-scancode` scan;
+- on each of the three, a job that runs the CI entry point exactly as a pipeline would (`ci/amygdala_ci.py all` on the eCTF fixture, which must fail its gates; then `baseline` and `report`, which must pass) and uploads the SARIF, JUnit and report files as an artifact. `tests/test_ci.py` covers the same paths in the unit suite, including the baseline round trip and that a committed credential's value never reaches any output;
 - plugin and marketplace validation with `claude plugin validate`. The model-graded evals under `evals/` are not part of CI; run them locally with `claude plugin eval`.
 
 ## Security

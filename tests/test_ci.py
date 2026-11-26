@@ -136,19 +136,19 @@ class Pipeline(TempDirTest):
         self.assertEqual(load(os.path.join(out, "findings.json"))["findings"], [])
 
         # 3. Someone commits a password. Only the new item fails, and its value never reaches an output file.
-        secret = "ci-test-not-a-real-value-7731"
+        planted = "ci-test-not-a-real-value-7731"
         target = os.path.join(repo, "files", "2025-ectf-insecure-example", "decoder", "src", "decoder.c")
         with open(target, "a", encoding="utf-8") as f:
-            f.write('\n#define WIFI_PASSWORD "%s"\n' % secret)
+            f.write('\n#define WIFI_PASSWORD "%s"\n' % planted)
         run_ci("hotspots", "--root", repo, "--out-dir", out, "--baseline", base, expect=0)
         cp = run_ci("report", "--root", repo, "--out-dir", out, "--baseline", base, expect=1)
         gates = {g["name"]: g for g in load(os.path.join(out, "gates.json"))["gates"]}
         self.assertEqual(gates["hotspot-rules"]["status"], "fail")
         self.assertEqual([it["rule"] for it in gates["hotspot-rules"]["items"]], ["hardcoded-password"])
         for name in ("gates.json", "findings.json", "report.html", "report.md", "findings.csv", "junit.xml", "leads.sarif", "summary.md"):
-            self.assertNotIn(secret, read(os.path.join(out, name)), name + " leaks the credential value")
-        self.assertNotIn(secret, cp.stdout + cp.stderr)
-        self.assertNotIn(secret, read(base))
+            self.assertNotIn(planted, read(os.path.join(out, name)), name + " leaks the credential value")
+        self.assertNotIn(planted, cp.stdout + cp.stderr)
+        self.assertNotIn(planted, read(base))
 
     def test_steps_run_individually_and_gates_skip_what_did_not_run(self):
         repo = self.fixture_copy()

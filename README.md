@@ -7,7 +7,8 @@ A Claude Code plugin from ./phazeOne that spots the dangers in embedded / IoT fi
 | `amygdala:review` | Reviews a whole firmware codebase (memory safety, security, secure boot / OTA, robustness, concurrency, hardware and power, dependencies, field diagnostics, code quality, IoT regulation) and produces a RAG-rated report: `report.html` for engineering managers, `report.md` for developers, `findings.csv` for Jira / ADO. Auto-detects the platform (PSoC 6 / ModusToolbox, Zephyr, nRF Connect, ESP-IDF, STM32, FreeRTOS, bare metal). |
 | `amygdala:oss` | Scans a codebase for open-source licence risk, works out what ships and how it is linked, and produces a RAG licence report, a draft THIRD_PARTY_NOTICES file and a CycloneDX SBOM. |
 | `amygdala:fix` | Works through the findings of a `amygdala:review` report one at a time, Red first, with one commit per finding and a status update in the report. |
-| CI/CD (`ci/amygdala_ci.py`) | The same checks without the model, for GitHub Actions, GitLab, Azure DevOps or any runner with Python: pattern and analyser leads, function metrics and the maintainability band, licence inventory and the opt-in vulnerability lookup, gated against a committed baseline so only new items fail the build. Writes SARIF, JUnit and the branded report. No code leaves the runner. See [ci/README.md](ci/README.md). |
+
+The automated part of the review and licence skills also runs on its own in a CI/CD pipeline, with no model and nothing leaving the runner; see [In a CI/CD pipeline](#in-a-cicd-pipeline).
 
 ## Example reports
 
